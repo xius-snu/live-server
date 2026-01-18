@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lobby Client</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #222; color: #eee; }
+        .hidden { display: none; }
+        #lobby-ui { border: 1px solid #444; padding: 20px; max-width: 400px; margin: 0 auto; border-radius: 8px; background: #333; }
+        #counter { font-size: 80px; font-weight: bold; margin: 20px 0; color: #4CAF50; }
+        button { font-size: 20px; padding: 10px 20px; cursor: pointer; border-radius: 4px; border: none; }
+        .btn-inc { background: #4CAF50; color: white; }
+        .btn-dec { background: #F44336; color: white; }
+        .btn-menu { background: #2196F3; color: white; margin-top: 20px; }
+        .btn-join { margin: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1>Global Lobby Menu</h1>
+        <button class="btn-menu" onclick="joinRandom()">Create Random Lobby</button>
+        <div id="lobby-list" style="margin-top: 20px;"></div>
+    </div>
+
+    <div id="lobby-ui" class="hidden">
+        <h2 id="lobby-title">Lobby</h2>
+        <div id="status">Connecting...</div>
+        <div id="counter">---</div>
+        <div style="color: #aaa">Live Viewers: <span id="viewers">0</span></div>
+        <div id="controls" class="hidden">
+            <button class="btn-dec" onclick="send('DEC')">-</button>
+            <button class="btn-inc" onclick="send('INC')">+</button>
+        </div>
+        <button class="btn-menu" onclick="leave()">Leave Lobby</button>
+    </div>
+
+    <script>
+        let ws;
+        
+        async function refreshMenu() {
+            try {
+                const res = await fetch('/api/lobbies');
+                const lobbies = await res.json();
+                const list = document.getElementById('lobby-list');
+                list.innerHTML = '<h3>Open Lobbies</h3>';
+                if (lobbies.length === 0) list.innerHTML += '<p>No active lobbies.</p>';
+                
+                lobbies.forEach(l => {
+                    const div = document.createElement('div');
+                    div.innerHTML = `Lobby ${l.id} (${l.count} users) 
+                        <button onclick="join('${l.id}', 'viewer')">Watch</button>
+                        <button onclick="join('${l.id}', 'player')">Play</button>`;
+                    list.appendChild(div);
+                });
+            } catch (e) { console.error('Menu load failed', e); }
+        }
+
+        function joinRandom() {
+            join(Math.floor(Math.random() * 10000), 'player');
+        }
+
+        function join(id, role) {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('lobby-ui').classList.remove('hidden');
+            document.getElementById('lobby-title').innerText = `Lobby ${id} (${role})`;
+            
+            if (role === 'player') document.getElementById('controls').classList.remove('hidden');
+            else document.getElementById('controls').classList.add('hidden');
+
+            // Connect
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const host = window.location.host; // e.g. localhost:3000
+            ws = new WebSocket(`${protocol}://${host}/ws/${id}?role=${role}`);
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                document.getElementById('counter').innerText = data.v;
+                document.getElementById('viewers').innerText = data.c;
+                document.getElementById('status').innerText = 'Live';
+            };
+
+            ws.onclose = (e) => {
+                document.getElementById('status').innerText = 'Disconnected: ' + (e.reason || 'Closed');
+            };
+        }
+
+        function send(action) {
+            if (ws && ws.readyState === 1) ws.send(JSON.stringify({ action }));
+        }
+
+        function leave() {
+            if (ws) ws.close();
+            document.getElementById('menu').classList.remove('hidden');
+            document.getElementById('lobby-ui').classList.add('hidden');
+            refreshMenu();
+        }
+
+        refreshMenu();
+        setInterval(refreshMenu, 5000); // Polling for menu updates
+    </script>
+</body>
+</html>
