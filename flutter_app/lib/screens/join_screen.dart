@@ -41,7 +41,12 @@ class _JoinScreenState extends State<JoinScreen> {
       }
     } catch (e) {
       print(e);
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 

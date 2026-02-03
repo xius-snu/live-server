@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/lobby_service.dart';
+import '../services/user_service.dart';
 
 class LobbyScreen extends StatefulWidget {
   final String lobbyId;
@@ -16,6 +18,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   int _value = 0;
   int _viewers = 0;
   String _status = 'Connecting...';
+  List<Map<String, dynamic>> _activeUsers = [];
 
   @override
   void initState() {
@@ -24,12 +27,34 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 
   void _connect() {
-    _service.connectToLobby(widget.lobbyId, widget.role);
+    final userService = Provider.of<UserService>(context, listen: false);
+    if (!userService.hasUser) {
+      setState(() => _status = 'Error: No User Identified');
+      return;
+    }
+
+    _service.connectToLobby(
+      widget.lobbyId, 
+      widget.role,
+      userService.userId!,
+      userService.username!
+    );
+
     _service.updates.listen((data) {
       if (mounted) {
         setState(() {
           if (data.containsKey('v')) _value = data['v'];
           if (data.containsKey('c')) _viewers = data['c'];
+          
+          if (data.containsKey('viewers') || data.containsKey('players')) {
+            final List<dynamic> viewers = data['viewers'] ?? [];
+            final List<dynamic> players = data['players'] ?? [];
+            _activeUsers = [
+              ...players.map((e) => Map<String, dynamic>.from(e)..addAll({'role': 'Player'})), 
+              ...viewers.map((e) => Map<String, dynamic>.from(e)..addAll({'role': 'Viewer'}))
+            ];
+          }
+          
           _status = 'Live';
         });
       }
@@ -67,21 +92,45 @@ class _LobbyScreenState extends State<LobbyScreen> {
           )
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$_value',
-              style: const TextStyle(fontSize: 120, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 2,
+             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$_value',
+                  style: const TextStyle(fontSize: 100, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Active Users: $_viewers',
+                  style: const TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Active Users: $_viewers',
-              style: const TextStyle(fontSize: 20, color: Colors.grey),
+          ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text('Connected Users', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          Expanded(
+            flex: 3,
+            child: ListView.builder(
+              itemCount: _activeUsers.length,
+              itemBuilder: (context, index) {
+                final user = _activeUsers[index];
+                return ListTile(
+                  leading: Icon(user['role'] == 'Player' ? Icons.gamepad : Icons.remove_red_eye),
+                  title: Text(user['name'] ?? 'Unknown'),
+                  subtitle: Text(user['role']),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: isPlayer

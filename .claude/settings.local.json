@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:live-server-4c3n.onrender.com)",
+      "Bash(flutter analyze:*)"
+    ]
+  }
+}
