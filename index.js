@@ -24,31 +24,31 @@ const pool = new Pool({
 // ============================================
 
 const THEMES = [
-    // Animals
-    'Cat', 'Dog', 'Fish', 'Bird', 'Frog', 'Turtle', 'Snake', 'Butterfly',
-    'Dragon', 'Unicorn', 'Penguin', 'Owl', 'Shark', 'Whale', 'Octopus',
-    'Bee', 'Spider', 'Elephant', 'Monkey', 'Rabbit', 'Bear', 'Fox',
-    'Bat', 'Crab', 'Jellyfish', 'Snail',
-    // Nature
-    'Tree', 'Sun', 'Moon', 'Star', 'Flower', 'Mountain', 'Ocean', 'Cloud',
-    'Rainbow', 'Mushroom', 'Cactus', 'Volcano', 'Waterfall', 'Sunset',
-    'Lightning', 'Tornado', 'Island', 'Forest', 'River', 'Snowflake',
-    // Objects
-    'House', 'Car', 'Boat', 'Rocket', 'Sword', 'Crown', 'Key', 'Diamond',
-    'Guitar', 'Camera', 'Lamp', 'Clock', 'Umbrella', 'Treasure Chest',
-    'Telescope', 'Compass', 'Anchor', 'Hourglass', 'Trophy', 'Candle',
-    // Food
-    'Apple', 'Cake', 'Pizza', 'Ice Cream', 'Cupcake', 'Donut', 'Burger',
-    'Taco', 'Sushi', 'Watermelon', 'Pineapple', 'Cherry', 'Cookie',
-    // Characters/Things
-    'Robot', 'Alien', 'Ghost', 'Skull', 'Wizard', 'Pirate', 'Ninja',
-    'Snowman', 'Scarecrow', 'Mermaid', 'Angel', 'Astronaut',
-    // Places/Scenes
-    'Castle', 'Lighthouse', 'Spaceship', 'Bridge', 'Tent', 'Windmill',
-    'Igloo', 'Pyramid', 'Ferris Wheel',
-    // Misc
-    'Heart', 'Fire', 'Planet', 'Eye', 'Hand', 'Smile', 'Music Note',
-    'Balloon', 'Kite', 'Dice', 'Maze', 'Ladder', 'Parachute'
+    // 동물 (Animals)
+    '고양이', '강아지', '물고기', '새', '개구리', '거북이', '뱀', '나비',
+    '용', '유니콘', '펭귄', '부엉이', '상어', '고래', '문어',
+    '벌', '거미', '코끼리', '원숭이', '토끼', '곰', '여우',
+    '박쥐', '게', '해파리', '달팽이',
+    // 자연 (Nature)
+    '나무', '태양', '달', '별', '꽃', '산', '바다', '구름',
+    '무지개', '버섯', '선인장', '화산', '폭포', '노을',
+    '번개', '토네이도', '섬', '숲', '강', '눈송이',
+    // 사물 (Objects)
+    '집', '자동차', '배', '로켓', '칼', '왕관', '열쇠', '다이아몬드',
+    '기타', '카메라', '램프', '시계', '우산', '보물상자',
+    '망원경', '나침반', '닻', '모래시계', '트로피', '초',
+    // 음식 (Food)
+    '사과', '케이크', '피자', '아이스크림', '컵케이크', '도넛', '햄버거',
+    '타코', '초밥', '수박', '파인애플', '체리', '쿠키',
+    // 캐릭터 (Characters/Things)
+    '로봇', '외계인', '유령', '해골', '마법사', '해적', '닌자',
+    '눈사람', '허수아비', '인어공주', '천사', '우주비행사',
+    // 장소 (Places/Scenes)
+    '성', '등대', '우주선', '다리', '텐트', '풍차',
+    '이글루', '피라미드', '관람차',
+    // 기타 (Misc)
+    '하트', '불', '행성', '눈', '손', '웃음', '음표',
+    '풍선', '연', '주사위', '미로', '사다리', '낙하산'
 ];
 
 const COLOR_PALETTE = [
