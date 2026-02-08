@@ -24,12 +24,31 @@ const pool = new Pool({
 // ============================================
 
 const THEMES = [
-    'Cat', 'Dog', 'House', 'Tree', 'Sun', 'Moon', 'Star', 'Heart',
-    'Fish', 'Bird', 'Flower', 'Car', 'Boat', 'Robot', 'Alien', 'Ghost',
-    'Sword', 'Crown', 'Apple', 'Cake', 'Pizza', 'Mountain', 'Ocean', 'Cloud',
-    'Rainbow', 'Mushroom', 'Cactus', 'Snowman', 'Fire', 'Lightning', 'Skull',
-    'Diamond', 'Key', 'Rocket', 'Planet', 'Dragon', 'Snake', 'Butterfly',
-    'Frog', 'Turtle'
+    // Animals
+    'Cat', 'Dog', 'Fish', 'Bird', 'Frog', 'Turtle', 'Snake', 'Butterfly',
+    'Dragon', 'Unicorn', 'Penguin', 'Owl', 'Shark', 'Whale', 'Octopus',
+    'Bee', 'Spider', 'Elephant', 'Monkey', 'Rabbit', 'Bear', 'Fox',
+    'Bat', 'Crab', 'Jellyfish', 'Snail',
+    // Nature
+    'Tree', 'Sun', 'Moon', 'Star', 'Flower', 'Mountain', 'Ocean', 'Cloud',
+    'Rainbow', 'Mushroom', 'Cactus', 'Volcano', 'Waterfall', 'Sunset',
+    'Lightning', 'Tornado', 'Island', 'Forest', 'River', 'Snowflake',
+    // Objects
+    'House', 'Car', 'Boat', 'Rocket', 'Sword', 'Crown', 'Key', 'Diamond',
+    'Guitar', 'Camera', 'Lamp', 'Clock', 'Umbrella', 'Treasure Chest',
+    'Telescope', 'Compass', 'Anchor', 'Hourglass', 'Trophy', 'Candle',
+    // Food
+    'Apple', 'Cake', 'Pizza', 'Ice Cream', 'Cupcake', 'Donut', 'Burger',
+    'Taco', 'Sushi', 'Watermelon', 'Pineapple', 'Cherry', 'Cookie',
+    // Characters/Things
+    'Robot', 'Alien', 'Ghost', 'Skull', 'Wizard', 'Pirate', 'Ninja',
+    'Snowman', 'Scarecrow', 'Mermaid', 'Angel', 'Astronaut',
+    // Places/Scenes
+    'Castle', 'Lighthouse', 'Spaceship', 'Bridge', 'Tent', 'Windmill',
+    'Igloo', 'Pyramid', 'Ferris Wheel',
+    // Misc
+    'Heart', 'Fire', 'Planet', 'Eye', 'Hand', 'Smile', 'Music Note',
+    'Balloon', 'Kite', 'Dice', 'Maze', 'Ladder', 'Parachute'
 ];
 
 const COLOR_PALETTE = [
@@ -41,7 +60,7 @@ const COLOR_PALETTE = [
 ];
 
 const DRAWING_TIMER = 90; // seconds
-const GRID_SIZE = 8;
+const GRID_SIZE = 12;
 const COLOR_PICK_ROUNDS = 3;
 
 // ============================================
@@ -61,8 +80,9 @@ function generateGameId() {
     return `game_${Date.now()}_${++gameIdCounter}`;
 }
 
-function getRandomTheme() {
-    return THEMES[Math.floor(Math.random() * THEMES.length)];
+function getTwoUniqueThemes() {
+    const shuffled = [...THEMES].sort(() => Math.random() - 0.5);
+    return [shuffled[0], shuffled[1]];
 }
 
 function getRandomColors(count, exclude = []) {
@@ -130,15 +150,14 @@ function handleQueue() {
 
 function createGame(p1, p2) {
     const gameId = generateGameId();
-    const theme = getRandomTheme();
+    const [theme1, theme2] = getTwoUniqueThemes();
 
     const game = {
         id: gameId,
         players: [
-            { socket: p1.socket, userId: p1.userId, username: p1.username, colors: [], grid: createEmptyGrid(), submitted: false, vote: null },
-            { socket: p2.socket, userId: p2.userId, username: p2.username, colors: [], grid: createEmptyGrid(), submitted: false, vote: null }
+            { socket: p1.socket, userId: p1.userId, username: p1.username, colors: [], grid: createEmptyGrid(), submitted: false, theme: theme1, guess: null },
+            { socket: p2.socket, userId: p2.userId, username: p2.username, colors: [], grid: createEmptyGrid(), submitted: false, theme: theme2, guess: null }
         ],
-        theme,
         phase: 'color_pick',
         colorPickRound: 0,
         currentColorOptions: [[], []], // per player
@@ -150,9 +169,9 @@ function createGame(p1, p2) {
     socketToGame.set(p1.socket, gameId);
     socketToGame.set(p2.socket, gameId);
 
-    // Notify both players
-    sendToSocket(p1.socket, { type: 'match_found', gameId, opponent: p2.username, theme, playerIndex: 0 });
-    sendToSocket(p2.socket, { type: 'match_found', gameId, opponent: p1.username, theme, playerIndex: 1 });
+    // Notify both players - each gets their OWN theme only
+    sendToSocket(p1.socket, { type: 'match_found', gameId, opponent: p2.username, theme: theme1, playerIndex: 0 });
+    sendToSocket(p2.socket, { type: 'match_found', gameId, opponent: p1.username, theme: theme2, playerIndex: 1 });
 
     // Start color pick
     startColorPickRound(gameId);
@@ -298,55 +317,57 @@ function endDrawingPhase(gameId) {
         game.timer = null;
     }
 
-    startVotingPhase(gameId);
+    startGuessingPhase(gameId);
 }
 
 // ============================================
-// VOTING PHASE
+// GUESSING PHASE
 // ============================================
 
-function startVotingPhase(gameId) {
+function startGuessingPhase(gameId) {
     const game = games[gameId];
     if (!game) return;
 
-    game.phase = 'voting';
+    game.phase = 'guessing';
 
     for (let i = 0; i < 2; i++) {
         const player = game.players[i];
         const opponent = game.players[1 - i];
-        player.vote = null;
+        player.guess = null;
 
+        // Show opponent's drawing (but NOT their theme - that's what you guess)
         sendToSocket(player.socket, {
-            type: 'voting_start',
-            yourGrid: player.grid,
+            type: 'guessing_start',
             opponentGrid: opponent.grid,
-            yourColors: player.colors,
             opponentColors: opponent.colors,
-            theme: game.theme,
-            playerIndex: i
+            opponentName: opponent.username,
         });
     }
 }
 
-function handleVote(socket, data) {
+function handleGuess(socket, data) {
     const gameId = socketToGame.get(socket);
     if (!gameId) return;
     const game = games[gameId];
-    if (!game || game.phase !== 'voting') return;
+    if (!game || game.phase !== 'guessing') return;
 
     const playerIdx = getPlayerIndex(game, socket);
     if (playerIdx === -1) return;
 
     const player = game.players[playerIdx];
-    if (player.vote !== null) return;
+    if (player.guess !== null) return;
 
-    const { vote } = data;
-    if (vote !== 0 && vote !== 1) return;
+    const { guess } = data;
+    if (typeof guess !== 'string' || guess.trim().length === 0) return;
 
-    player.vote = vote;
+    player.guess = guess.trim().substring(0, 50); // Cap length
 
-    // If both voted, resolve
-    if (game.players.every(p => p.vote !== null)) {
+    // Notify opponent that you've guessed
+    const opponent = getOpponent(game, socket);
+    sendToSocket(opponent.socket, { type: 'opponent_guessed' });
+
+    // If both guessed, resolve
+    if (game.players.every(p => p.guess !== null)) {
         resolveGame(gameId);
     }
 }
@@ -355,21 +376,25 @@ function handleVote(socket, data) {
 // RESULTS
 // ============================================
 
+function isGuessCorrect(guess, actualTheme) {
+    return guess.toLowerCase().trim() === actualTheme.toLowerCase().trim();
+}
+
 async function resolveGame(gameId) {
     const game = games[gameId];
     if (!game) return;
 
     game.phase = 'results';
 
-    // Count votes
-    const votesForPlayer = [0, 0];
-    for (const p of game.players) {
-        votesForPlayer[p.vote]++;
-    }
+    // Check correctness: player[i] guessed opponent[1-i]'s theme
+    const p0GuessedCorrectly = isGuessCorrect(game.players[0].guess, game.players[1].theme);
+    const p1GuessedCorrectly = isGuessCorrect(game.players[1].guess, game.players[0].theme);
 
+    // Determine winner: if both correct or both wrong = draw, otherwise the one who guessed right wins
     let winner = -1; // -1 = draw
-    if (votesForPlayer[0] > votesForPlayer[1]) winner = 0;
-    else if (votesForPlayer[1] > votesForPlayer[0]) winner = 1;
+    if (p0GuessedCorrectly && !p1GuessedCorrectly) winner = 0;
+    else if (p1GuessedCorrectly && !p0GuessedCorrectly) winner = 1;
+    // else draw (both correct or both wrong)
 
     // Update database
     try {
@@ -393,7 +418,7 @@ async function resolveGame(gameId) {
                 game.players[0].userId,
                 game.players[1].userId,
                 winner === -1 ? null : game.players[winner].userId,
-                game.theme,
+                game.players[0].theme + ' / ' + game.players[1].theme,
                 JSON.stringify(game.players[0].grid),
                 JSON.stringify(game.players[1].grid)
             ]
@@ -406,6 +431,7 @@ async function resolveGame(gameId) {
     for (let i = 0; i < 2; i++) {
         const player = game.players[i];
         const opponentIdx = 1 - i;
+        const opponent = game.players[opponentIdx];
 
         let stats = { wins: 0, losses: 0, draws: 0 };
         try {
@@ -415,17 +441,27 @@ async function resolveGame(gameId) {
             console.error('Stats fetch error:', e.message);
         }
 
+        const myGuessCorrect = (i === 0) ? p0GuessedCorrectly : p1GuessedCorrectly;
+        const opponentGuessCorrect = (i === 0) ? p1GuessedCorrectly : p0GuessedCorrectly;
+
         sendToSocket(player.socket, {
             type: 'results',
             winner,
             yourIndex: i,
-            yourVote: player.vote,
-            opponentVote: game.players[opponentIdx].vote,
+            // Your drawing info
             yourGrid: player.grid,
-            opponentGrid: game.players[opponentIdx].grid,
             yourColors: player.colors,
-            opponentColors: game.players[opponentIdx].colors,
-            theme: game.theme,
+            yourTheme: player.theme,
+            // Opponent's drawing info
+            opponentGrid: opponent.grid,
+            opponentColors: opponent.colors,
+            opponentTheme: opponent.theme,
+            opponentName: opponent.username,
+            // Guessing results
+            yourGuess: player.guess,
+            opponentGuess: opponent.guess,
+            yourGuessCorrect: myGuessCorrect,
+            opponentGuessCorrect: opponentGuessCorrect,
             stats
         });
     }
@@ -455,22 +491,24 @@ function handleRematch(socket) {
 
     // If both want rematch, start new round
     if (game.rematch.every(r => r)) {
-        const newTheme = getRandomTheme();
-        game.theme = newTheme;
+        const [theme1, theme2] = getTwoUniqueThemes();
         game.phase = 'color_pick';
         game.colorPickRound = 0;
         game.rematch = [false, false];
 
-        for (const p of game.players) {
+        game.players[0].theme = theme1;
+        game.players[1].theme = theme2;
+
+        for (let i = 0; i < 2; i++) {
+            const p = game.players[i];
             p.colors = [];
             p.grid = createEmptyGrid();
             p.submitted = false;
-            p.vote = null;
+            p.guess = null;
         }
 
-        for (const p of game.players) {
-            sendToSocket(p.socket, { type: 'rematch_start', theme: newTheme });
-        }
+        sendToSocket(game.players[0].socket, { type: 'rematch_start', theme: theme1 });
+        sendToSocket(game.players[1].socket, { type: 'rematch_start', theme: theme2 });
 
         startColorPickRound(gameId);
     }
@@ -586,8 +624,8 @@ function handleMessage(socket, data) {
             handleSubmit(socket);
             break;
 
-        case 'vote':
-            handleVote(socket, data);
+        case 'guess':
+            handleGuess(socket, data);
             break;
 
         case 'rematch':
