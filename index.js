@@ -5,9 +5,8 @@ fastify.register(require('@fastify/cors'), {
     methods: ['GET', 'POST', 'PUT', 'DELETE']
 });
 fastify.register(require('@fastify/websocket'));
-const fs = require('fs');
-const path = require('path');
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 // ============================================
 // DATABASE
@@ -20,625 +19,43 @@ const pool = new Pool({
 });
 
 // ============================================
-// GAME CONSTANTS
+// MARKETPLACE CONSTANTS
 // ============================================
 
-const THEMES = [
-    // 동물 (Animals)
-    '고양이', '강아지', '물고기', '새', '개구리', '거북이', '뱀', '나비',
-    '용', '유니콘', '펭귄', '부엉이', '상어', '고래', '문어',
-    '벌', '거미', '코끼리', '원숭이', '토끼', '곰', '여우',
-    '박쥐', '게', '해파리', '달팽이',
-    // 자연 (Nature)
-    '나무', '태양', '달', '별', '꽃', '산', '바다', '구름',
-    '무지개', '버섯', '선인장', '화산', '폭포', '노을',
-    '번개', '토네이도', '섬', '숲', '강', '눈송이',
-    // 사물 (Objects)
-    '집', '자동차', '배', '로켓', '칼', '왕관', '열쇠', '다이아몬드',
-    '기타', '카메라', '램프', '시계', '우산', '보물상자',
-    '망원경', '나침반', '닻', '모래시계', '트로피', '초',
-    // 음식 (Food)
-    '사과', '케이크', '피자', '아이스크림', '컵케이크', '도넛', '햄버거',
-    '타코', '초밥', '수박', '파인애플', '체리', '쿠키',
-    // 캐릭터 (Characters/Things)
-    '로봇', '외계인', '유령', '해골', '마법사', '해적', '닌자',
-    '눈사람', '허수아비', '인어공주', '천사', '우주비행사',
-    // 장소 (Places/Scenes)
-    '성', '등대', '우주선', '다리', '텐트', '풍차',
-    '이글루', '피라미드', '관람차',
-    // 기타 (Misc)
-    '하트', '불', '행성', '눈', '손', '웃음', '음표',
-    '풍선', '연', '주사위', '미로', '사다리', '낙하산'
+const ITEM_TYPES = [
+    { id: 'basic_paint', name: 'Basic Paint Can', category: 'paint', base_price: 1 },
+    { id: 'premium_paint', name: 'Premium Paint Can', category: 'paint', base_price: 3 },
+    { id: 'neon_paint', name: 'Neon Paint', category: 'paint', base_price: 10 },
+    { id: 'glitter_finish', name: 'Glitter Finish', category: 'paint', base_price: 12 },
+    { id: 'gold_roller', name: 'Gold Roller Skin', category: 'roller_skin', base_price: 5 },
+    { id: 'money_roller', name: 'Money Roller Skin', category: 'roller_skin', base_price: 25 },
+    { id: 'diamond_roller', name: 'Diamond Roller Skin', category: 'roller_skin', base_price: 50 },
+    { id: 'speed_boost', name: 'Speed Boost (1hr)', category: 'consumable', base_price: 2 },
+    { id: 'blueprint_penthouse', name: 'Blueprint: Penthouse', category: 'collectible', base_price: 50 },
+    { id: 'painters_crown', name: "Painter's Crown", category: 'collectible', base_price: 100 },
 ];
 
-const COLOR_PALETTE = [
-    '#FF0000', '#FF6B35', '#FFC107', '#FFEB3B', '#4CAF50',
-    '#2E7D32', '#00BCD4', '#2196F3', '#1565C0', '#9C27B0',
-    '#E91E63', '#F48FB1', '#795548', '#5D4037', '#FF9800',
-    '#607D8B', '#9E9E9E', '#424242', '#000000', '#FFFFFF',
-    '#FFCDD2', '#C8E6C9', '#BBDEFB', '#FFF9C4', '#D1C4E9'
-];
-
-const DRAWING_TIMER = 90; // seconds
-const GRID_SIZE = 12;
-const COLOR_PICK_ROUNDS = 3;
-
 // ============================================
-// IN-MEMORY GAME STATE
+// IN-MEMORY: MARKETPLACE WS CLIENTS
 // ============================================
 
-const matchQueue = [];       // [{ socket, userId, username }]
-const games = {};            // gameId -> game object
-const socketToGame = new Map(); // socket -> gameId
+const marketplaceClients = new Set(); // Set of WebSocket connections
+
+function broadcastMarketplace(data) {
+    const msg = JSON.stringify(data);
+    for (const ws of marketplaceClients) {
+        if (ws.readyState === 1) {
+            ws.send(msg);
+        }
+    }
+}
 
 // ============================================
 // HELPERS
 // ============================================
 
-let gameIdCounter = 0;
-function generateGameId() {
-    return `game_${Date.now()}_${++gameIdCounter}`;
-}
-
-function getTwoUniqueThemes() {
-    const shuffled = [...THEMES].sort(() => Math.random() - 0.5);
-    return [shuffled[0], shuffled[1]];
-}
-
-function getRandomColors(count, exclude = []) {
-    const available = COLOR_PALETTE.filter(c => !exclude.includes(c));
-    const result = [];
-    const copy = [...available];
-    for (let i = 0; i < count && copy.length > 0; i++) {
-        const idx = Math.floor(Math.random() * copy.length);
-        result.push(copy.splice(idx, 1)[0]);
-    }
-    return result;
-}
-
-function createEmptyGrid() {
-    return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(-1));
-}
-
-function sendToSocket(socket, data) {
-    if (socket && socket.readyState === 1) {
-        socket.send(JSON.stringify(data));
-    }
-}
-
-function getPlayerIndex(game, socket) {
-    return game.players.findIndex(p => p.socket === socket);
-}
-
-function getOpponent(game, socket) {
-    const idx = getPlayerIndex(game, socket);
-    return idx === 0 ? game.players[1] : game.players[0];
-}
-
-function cleanupGame(gameId) {
-    const game = games[gameId];
-    if (!game) return;
-    if (game.timer) clearTimeout(game.timer);
-    for (const p of game.players) {
-        socketToGame.delete(p.socket);
-    }
-    delete games[gameId];
-}
-
-// ============================================
-// MATCHMAKING
-// ============================================
-
-function handleQueue() {
-    while (matchQueue.length >= 2) {
-        const p1 = matchQueue.shift();
-        const p2 = matchQueue.shift();
-
-        // Verify both sockets still open
-        if (p1.socket.readyState !== 1) {
-            if (p2.socket.readyState === 1) matchQueue.unshift(p2);
-            continue;
-        }
-        if (p2.socket.readyState !== 1) {
-            if (p1.socket.readyState === 1) matchQueue.unshift(p1);
-            continue;
-        }
-
-        createGame(p1, p2);
-    }
-}
-
-function createGame(p1, p2) {
-    const gameId = generateGameId();
-    const [theme1, theme2] = getTwoUniqueThemes();
-
-    const game = {
-        id: gameId,
-        players: [
-            { socket: p1.socket, userId: p1.userId, username: p1.username, colors: [], grid: createEmptyGrid(), submitted: false, theme: theme1, guess: null },
-            { socket: p2.socket, userId: p2.userId, username: p2.username, colors: [], grid: createEmptyGrid(), submitted: false, theme: theme2, guess: null }
-        ],
-        phase: 'color_pick',
-        colorPickRound: 0,
-        currentColorOptions: [[], []], // per player
-        timer: null,
-        rematch: [false, false]
-    };
-
-    games[gameId] = game;
-    socketToGame.set(p1.socket, gameId);
-    socketToGame.set(p2.socket, gameId);
-
-    // Notify both players - each gets their OWN theme only
-    sendToSocket(p1.socket, { type: 'match_found', gameId, opponent: p2.username, theme: theme1, playerIndex: 0 });
-    sendToSocket(p2.socket, { type: 'match_found', gameId, opponent: p1.username, theme: theme2, playerIndex: 1 });
-
-    // Start color pick
-    startColorPickRound(gameId);
-}
-
-// ============================================
-// COLOR PICK PHASE
-// ============================================
-
-function startColorPickRound(gameId) {
-    const game = games[gameId];
-    if (!game) return;
-
-    for (let i = 0; i < 2; i++) {
-        const player = game.players[i];
-        const options = getRandomColors(3, player.colors);
-        game.currentColorOptions[i] = options;
-        sendToSocket(player.socket, { type: 'color_options', colors: options, round: game.colorPickRound });
-    }
-}
-
-function handlePickColor(socket, data) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game || game.phase !== 'color_pick') return;
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) return;
-
-    const { index } = data;
-    if (typeof index !== 'number' || index < 0 || index > 2) return;
-
-    const player = game.players[playerIdx];
-    // Don't allow picking again if already picked this round
-    if (player.colors.length > game.colorPickRound) return;
-
-    const chosenColor = game.currentColorOptions[playerIdx][index];
-    if (!chosenColor) return;
-
-    player.colors.push(chosenColor);
-    sendToSocket(socket, { type: 'color_picked', round: game.colorPickRound, color: chosenColor });
-
-    // Check if both players picked
-    if (game.players.every(p => p.colors.length > game.colorPickRound)) {
-        game.colorPickRound++;
-        if (game.colorPickRound < COLOR_PICK_ROUNDS) {
-            startColorPickRound(gameId);
-        } else {
-            startDrawingPhase(gameId);
-        }
-    }
-}
-
-// ============================================
-// DRAWING PHASE
-// ============================================
-
-function startDrawingPhase(gameId) {
-    const game = games[gameId];
-    if (!game) return;
-
-    game.phase = 'drawing';
-
-    for (const player of game.players) {
-        player.submitted = false;
-        player.grid = createEmptyGrid();
-        sendToSocket(player.socket, { type: 'drawing_start', yourColors: player.colors, timer: DRAWING_TIMER });
-    }
-
-    // Server-authoritative timer
-    game.timer = setTimeout(() => {
-        endDrawingPhase(gameId);
-    }, DRAWING_TIMER * 1000);
-}
-
-function handleDraw(socket, data) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game || game.phase !== 'drawing') return;
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) return;
-
-    const player = game.players[playerIdx];
-    if (player.submitted) return;
-
-    const { x, y, colorIndex } = data;
-    if (typeof x !== 'number' || typeof y !== 'number' || typeof colorIndex !== 'number') return;
-    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
-    if (colorIndex < -1 || colorIndex > 2) return;
-
-    player.grid[y][x] = colorIndex;
-}
-
-function handleClearBoard(socket) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game || game.phase !== 'drawing') return;
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) return;
-
-    const player = game.players[playerIdx];
-    if (player.submitted) return;
-
-    player.grid = createEmptyGrid();
-}
-
-function handleSubmit(socket) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game || game.phase !== 'drawing') return;
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) return;
-
-    const player = game.players[playerIdx];
-    if (player.submitted) return;
-
-    player.submitted = true;
-
-    // Notify opponent
-    const opponent = getOpponent(game, socket);
-    sendToSocket(opponent.socket, { type: 'opponent_submitted' });
-
-    // If both submitted, end early
-    if (game.players.every(p => p.submitted)) {
-        clearTimeout(game.timer);
-        endDrawingPhase(gameId);
-    }
-}
-
-function endDrawingPhase(gameId) {
-    const game = games[gameId];
-    if (!game || game.phase !== 'drawing') return;
-
-    if (game.timer) {
-        clearTimeout(game.timer);
-        game.timer = null;
-    }
-
-    startGuessingPhase(gameId);
-}
-
-// ============================================
-// GUESSING PHASE
-// ============================================
-
-function startGuessingPhase(gameId) {
-    const game = games[gameId];
-    if (!game) return;
-
-    game.phase = 'guessing';
-
-    for (let i = 0; i < 2; i++) {
-        const player = game.players[i];
-        const opponent = game.players[1 - i];
-        player.guess = null;
-
-        // Show opponent's drawing (but NOT their theme - that's what you guess)
-        sendToSocket(player.socket, {
-            type: 'guessing_start',
-            opponentGrid: opponent.grid,
-            opponentColors: opponent.colors,
-            opponentName: opponent.username,
-        });
-    }
-}
-
-function handleGuess(socket, data) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game || game.phase !== 'guessing') return;
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) return;
-
-    const player = game.players[playerIdx];
-    if (player.guess !== null) return;
-
-    const { guess } = data;
-    if (typeof guess !== 'string' || guess.trim().length === 0) return;
-
-    player.guess = guess.trim().substring(0, 50); // Cap length
-
-    // Notify opponent that you've guessed
-    const opponent = getOpponent(game, socket);
-    sendToSocket(opponent.socket, { type: 'opponent_guessed' });
-
-    // If both guessed, resolve
-    if (game.players.every(p => p.guess !== null)) {
-        resolveGame(gameId);
-    }
-}
-
-// ============================================
-// RESULTS
-// ============================================
-
-function isGuessCorrect(guess, actualTheme) {
-    return guess.toLowerCase().trim() === actualTheme.toLowerCase().trim();
-}
-
-async function resolveGame(gameId) {
-    const game = games[gameId];
-    if (!game) return;
-
-    game.phase = 'results';
-
-    // Check correctness: player[i] guessed opponent[1-i]'s theme
-    const p0GuessedCorrectly = isGuessCorrect(game.players[0].guess, game.players[1].theme);
-    const p1GuessedCorrectly = isGuessCorrect(game.players[1].guess, game.players[0].theme);
-
-    // Determine winner: if both correct or both wrong = draw, otherwise the one who guessed right wins
-    let winner = -1; // -1 = draw
-    if (p0GuessedCorrectly && !p1GuessedCorrectly) winner = 0;
-    else if (p1GuessedCorrectly && !p0GuessedCorrectly) winner = 1;
-    // else draw (both correct or both wrong)
-
-    // Update database
-    try {
-        for (let i = 0; i < 2; i++) {
-            const player = game.players[i];
-            if (winner === -1) {
-                await pool.query('UPDATE users SET draws = draws + 1 WHERE user_id = $1', [player.userId]);
-            } else if (winner === i) {
-                await pool.query('UPDATE users SET wins = wins + 1 WHERE user_id = $1', [player.userId]);
-            } else {
-                await pool.query('UPDATE users SET losses = losses + 1 WHERE user_id = $1', [player.userId]);
-            }
-        }
-
-        // Save game history
-        await pool.query(
-            `INSERT INTO game_history (game_id, player1_id, player2_id, winner_id, theme, player1_grid, player2_grid)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-                gameId,
-                game.players[0].userId,
-                game.players[1].userId,
-                winner === -1 ? null : game.players[winner].userId,
-                game.players[0].theme + ' / ' + game.players[1].theme,
-                JSON.stringify(game.players[0].grid),
-                JSON.stringify(game.players[1].grid)
-            ]
-        );
-    } catch (e) {
-        console.error('DB update error:', e.message);
-    }
-
-    // Fetch updated stats and send results
-    for (let i = 0; i < 2; i++) {
-        const player = game.players[i];
-        const opponentIdx = 1 - i;
-        const opponent = game.players[opponentIdx];
-
-        let stats = { wins: 0, losses: 0, draws: 0 };
-        try {
-            const res = await pool.query('SELECT wins, losses, draws FROM users WHERE user_id = $1', [player.userId]);
-            if (res.rows.length > 0) stats = res.rows[0];
-        } catch (e) {
-            console.error('Stats fetch error:', e.message);
-        }
-
-        const myGuessCorrect = (i === 0) ? p0GuessedCorrectly : p1GuessedCorrectly;
-        const opponentGuessCorrect = (i === 0) ? p1GuessedCorrectly : p0GuessedCorrectly;
-
-        sendToSocket(player.socket, {
-            type: 'results',
-            winner,
-            yourIndex: i,
-            // Your drawing info
-            yourGrid: player.grid,
-            yourColors: player.colors,
-            yourTheme: player.theme,
-            // Opponent's drawing info
-            opponentGrid: opponent.grid,
-            opponentColors: opponent.colors,
-            opponentTheme: opponent.theme,
-            opponentName: opponent.username,
-            // Guessing results
-            yourGuess: player.guess,
-            opponentGuess: opponent.guess,
-            yourGuessCorrect: myGuessCorrect,
-            opponentGuessCorrect: opponentGuessCorrect,
-            stats
-        });
-    }
-
-    // Reset rematch flags
-    game.rematch = [false, false];
-}
-
-// ============================================
-// REMATCH / EXIT
-// ============================================
-
-function handleRematch(socket) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game || game.phase !== 'results') return;
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) return;
-
-    game.rematch[playerIdx] = true;
-
-    // Notify opponent
-    const opponent = getOpponent(game, socket);
-    sendToSocket(opponent.socket, { type: 'opponent_wants_rematch' });
-
-    // If both want rematch, start new round
-    if (game.rematch.every(r => r)) {
-        const [theme1, theme2] = getTwoUniqueThemes();
-        game.phase = 'color_pick';
-        game.colorPickRound = 0;
-        game.rematch = [false, false];
-
-        game.players[0].theme = theme1;
-        game.players[1].theme = theme2;
-
-        for (let i = 0; i < 2; i++) {
-            const p = game.players[i];
-            p.colors = [];
-            p.grid = createEmptyGrid();
-            p.submitted = false;
-            p.guess = null;
-        }
-
-        sendToSocket(game.players[0].socket, { type: 'rematch_start', theme: theme1 });
-        sendToSocket(game.players[1].socket, { type: 'rematch_start', theme: theme2 });
-
-        startColorPickRound(gameId);
-    }
-}
-
-function handleExit(socket) {
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-    const game = games[gameId];
-    if (!game) return;
-
-    const opponent = getOpponent(game, socket);
-    sendToSocket(opponent.socket, { type: 'opponent_left' });
-
-    cleanupGame(gameId);
-}
-
-// ============================================
-// DISCONNECT
-// ============================================
-
-async function handleDisconnect(socket) {
-    // Remove from queue
-    const queueIdx = matchQueue.findIndex(q => q.socket === socket);
-    if (queueIdx !== -1) {
-        matchQueue.splice(queueIdx, 1);
-    }
-
-    // Handle in-game disconnect
-    const gameId = socketToGame.get(socket);
-    if (!gameId) return;
-
-    const game = games[gameId];
-    if (!game) {
-        socketToGame.delete(socket);
-        return;
-    }
-
-    const playerIdx = getPlayerIndex(game, socket);
-    if (playerIdx === -1) {
-        socketToGame.delete(socket);
-        return;
-    }
-
-    const opponent = getOpponent(game, socket);
-
-    // If game is active (not results), opponent wins by forfeit
-    if (game.phase !== 'results') {
-        const opponentIdx = 1 - playerIdx;
-
-        try {
-            await pool.query('UPDATE users SET wins = wins + 1 WHERE user_id = $1', [opponent.userId]);
-            await pool.query('UPDATE users SET losses = losses + 1 WHERE user_id = $1', [game.players[playerIdx].userId]);
-        } catch (e) {
-            console.error('Forfeit DB error:', e.message);
-        }
-
-        let stats = { wins: 0, losses: 0, draws: 0 };
-        try {
-            const res = await pool.query('SELECT wins, losses, draws FROM users WHERE user_id = $1', [opponent.userId]);
-            if (res.rows.length > 0) stats = res.rows[0];
-        } catch (e) {
-            console.error('Stats fetch error:', e.message);
-        }
-
-        sendToSocket(opponent.socket, {
-            type: 'opponent_left',
-            forfeit: true,
-            stats
-        });
-    } else {
-        sendToSocket(opponent.socket, { type: 'opponent_left' });
-    }
-
-    cleanupGame(gameId);
-}
-
-// ============================================
-// MESSAGE ROUTER
-// ============================================
-
-function handleMessage(socket, data) {
-    switch (data.action) {
-        case 'queue':
-            // Prevent duplicate queue entries
-            if (matchQueue.some(q => q.socket === socket)) return;
-            if (socketToGame.has(socket)) return;
-            matchQueue.push({ socket, userId: socket.userId, username: socket.username });
-            sendToSocket(socket, { type: 'queued' });
-            handleQueue();
-            break;
-
-        case 'cancel_queue': {
-            const idx = matchQueue.findIndex(q => q.socket === socket);
-            if (idx !== -1) matchQueue.splice(idx, 1);
-            sendToSocket(socket, { type: 'queue_cancelled' });
-            break;
-        }
-
-        case 'pick_color':
-            handlePickColor(socket, data);
-            break;
-
-        case 'draw':
-            handleDraw(socket, data);
-            break;
-
-        case 'clear_board':
-            handleClearBoard(socket);
-            break;
-
-        case 'submit':
-            handleSubmit(socket);
-            break;
-
-        case 'guess':
-            handleGuess(socket, data);
-            break;
-
-        case 'rematch':
-            handleRematch(socket);
-            break;
-
-        case 'exit':
-            handleExit(socket);
-            break;
-
-        default:
-            break;
-    }
+function generateId(prefix = 'id') {
+    return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 }
 
 // ============================================
@@ -657,34 +74,89 @@ fastify.register(async function (fastify) {
             draws INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE TABLE IF NOT EXISTS game_history (
+
+        CREATE TABLE IF NOT EXISTS player_progress (
+            user_id TEXT PRIMARY KEY REFERENCES users(user_id),
+            cash DOUBLE PRECISION DEFAULT 0,
+            stars INTEGER DEFAULT 0,
+            prestige_level INTEGER DEFAULT 0,
+            current_house TEXT DEFAULT 'apartment',
+            current_room INTEGER DEFAULT 0,
+            upgrades JSONB DEFAULT '{}',
+            total_walls_painted INTEGER DEFAULT 0,
+            total_cash_earned DOUBLE PRECISION DEFAULT 0,
+            last_online_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS player_inventory (
+            instance_id TEXT PRIMARY KEY,
+            item_type_id TEXT NOT NULL,
+            rarity TEXT NOT NULL DEFAULT 'common',
+            owner_id TEXT NOT NULL REFERENCES users(user_id),
+            minted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_listed BOOLEAN DEFAULT FALSE
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_listings (
+            listing_id TEXT PRIMARY KEY,
+            seller_id TEXT NOT NULL REFERENCES users(user_id),
+            instance_id TEXT NOT NULL REFERENCES player_inventory(instance_id),
+            price_stars INTEGER NOT NULL,
+            listing_fee_percent DOUBLE PRECISION DEFAULT 5.0,
+            listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active'
+        );
+
+        CREATE TABLE IF NOT EXISTS marketplace_trades (
+            trade_id SERIAL PRIMARY KEY,
+            listing_id TEXT NOT NULL REFERENCES marketplace_listings(listing_id),
+            buyer_id TEXT NOT NULL REFERENCES users(user_id),
+            seller_id TEXT NOT NULL REFERENCES users(user_id),
+            instance_id TEXT NOT NULL,
+            item_type_id TEXT NOT NULL,
+            price_stars INTEGER NOT NULL,
+            fee_stars INTEGER NOT NULL,
+            traded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS events (
+            event_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            start_at TIMESTAMP NOT NULL,
+            end_at TIMESTAMP NOT NULL,
+            drop_table JSONB DEFAULT '{"common": 0.6, "rare": 0.25, "epic": 0.1, "legendary": 0.05}',
+            max_attempts INTEGER DEFAULT 3,
+            status TEXT DEFAULT 'scheduled'
+        );
+
+        CREATE TABLE IF NOT EXISTS event_participation (
             id SERIAL PRIMARY KEY,
-            game_id TEXT NOT NULL,
-            player1_id TEXT NOT NULL,
-            player2_id TEXT NOT NULL,
-            winner_id TEXT,
-            theme TEXT NOT NULL,
-            player1_grid JSONB,
-            player2_grid JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            event_id TEXT NOT NULL REFERENCES events(event_id),
+            user_id TEXT NOT NULL REFERENCES users(user_id),
+            attempt_number INTEGER NOT NULL,
+            coverage_percent DOUBLE PRECISION,
+            reward_instance_id TEXT,
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(event_id, user_id, attempt_number)
         );
     `);
 
-    // Safe migrations for existing users table
+    // Safe migrations for new columns
     try {
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS draws INTEGER DEFAULT 0');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_listings_status ON marketplace_listings(status)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_inventory_owner ON player_inventory(owner_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_trades_item ON marketplace_trades(item_type_id)');
         console.log('Schema migration complete');
     } catch (e) {
         console.log('Schema migration note:', e.message);
     }
 
     // ==================
-    // REST API
+    // REST API: USER
     // ==================
 
-    // Upsert user
     fastify.post('/api/user', async (req, reply) => {
         const { userId, username } = req.body;
         if (!userId || !username) {
@@ -703,7 +175,6 @@ fastify.register(async function (fastify) {
         }
     });
 
-    // Get user with stats
     fastify.get('/api/user/:userId', async (req, reply) => {
         const { userId } = req.params;
         try {
@@ -712,44 +183,542 @@ fastify.register(async function (fastify) {
                 [userId]
             );
             if (res.rows.length === 0) {
-                return { username: null, wins: 0, losses: 0, draws: 0 };
+                return { username: null };
             }
             return res.rows[0];
         } catch (e) {
             fastify.log.error('DB Get Error: ' + e.message);
-            return { username: null, wins: 0, losses: 0, draws: 0 };
+            return { username: null };
         }
     });
 
-    // Serve Client (health check page)
-    fastify.get('/', async (req, reply) => {
-        reply.type('text/html');
-        return '<h1>Pixel Duel Server</h1><p>Server is running.</p>';
+    // ==================
+    // REST API: PROGRESS
+    // ==================
+
+    fastify.post('/api/progress/save', async (req, reply) => {
+        const { userId, cash, stars, prestigeLevel, currentHouse, currentRoom,
+                upgrades, totalWallsPainted, totalCashEarned } = req.body;
+        if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        try {
+            await pool.query(`
+                INSERT INTO player_progress
+                    (user_id, cash, stars, prestige_level, current_house, current_room,
+                     upgrades, total_walls_painted, total_cash_earned, last_online_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    cash = $2, stars = $3, prestige_level = $4,
+                    current_house = $5, current_room = $6, upgrades = $7,
+                    total_walls_painted = $8, total_cash_earned = $9,
+                    last_online_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            `, [userId, cash || 0, stars || 0, prestigeLevel || 0,
+                currentHouse || 'apartment', currentRoom || 0,
+                JSON.stringify(upgrades || {}),
+                totalWallsPainted || 0, totalCashEarned || 0]);
+
+            return { success: true };
+        } catch (e) {
+            fastify.log.error('Progress save error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    fastify.get('/api/progress/:userId', async (req, reply) => {
+        const { userId } = req.params;
+        try {
+            const res = await pool.query(
+                'SELECT * FROM player_progress WHERE user_id = $1',
+                [userId]
+            );
+
+            if (res.rows.length === 0) {
+                return {
+                    cash: 0, stars: 0, prestigeLevel: 0,
+                    currentHouse: 'apartment', currentRoom: 0,
+                    upgrades: {}, totalWallsPainted: 0, totalCashEarned: 0,
+                    idleIncome: 0
+                };
+            }
+
+            const row = res.rows[0];
+            const upgrades = row.upgrades || {};
+
+            // Calculate idle income server-side
+            const autoPainterLevel = upgrades.autoPainter || 0;
+            const starMultiplier = 1.0 + 0.10 * (row.stars || 0);
+            const lastOnline = new Date(row.last_online_at);
+            const now = new Date();
+            let offlineSeconds = Math.floor((now - lastOnline) / 1000);
+            offlineSeconds = Math.min(offlineSeconds, 8 * 3600); // Cap at 8 hours
+            const idleIncome = autoPainterLevel * 2.0 * offlineSeconds * starMultiplier;
+
+            return {
+                cash: (row.cash || 0) + idleIncome,
+                stars: row.stars || 0,
+                prestigeLevel: row.prestige_level || 0,
+                currentHouse: row.current_house || 'apartment',
+                currentRoom: row.current_room || 0,
+                upgrades: upgrades,
+                totalWallsPainted: row.total_walls_painted || 0,
+                totalCashEarned: row.total_cash_earned || 0,
+                idleIncome: idleIncome,
+                lastOnlineAt: row.last_online_at
+            };
+        } catch (e) {
+            fastify.log.error('Progress load error: ' + e.message);
+            return { cash: 0, stars: 0, prestigeLevel: 0, currentHouse: 'apartment',
+                     currentRoom: 0, upgrades: {}, idleIncome: 0 };
+        }
     });
 
     // ==================
-    // WEBSOCKET
+    // REST API: INVENTORY
     // ==================
 
-    fastify.get('/ws', { websocket: true }, (connection, req) => {
+    fastify.get('/api/inventory/:userId', async (req, reply) => {
+        const { userId } = req.params;
+        try {
+            const res = await pool.query(
+                `SELECT instance_id, item_type_id, rarity, minted_at, is_listed
+                 FROM player_inventory WHERE owner_id = $1
+                 ORDER BY minted_at DESC`,
+                [userId]
+            );
+            return { items: res.rows };
+        } catch (e) {
+            fastify.log.error('Inventory error: ' + e.message);
+            return { items: [] };
+        }
+    });
+
+    // ==================
+    // REST API: MARKETPLACE
+    // ==================
+
+    fastify.get('/api/marketplace/listings', async (req, reply) => {
+        const { category, sort } = req.query;
+        try {
+            let query = `
+                SELECT ml.listing_id, ml.seller_id, ml.instance_id, ml.price_stars,
+                       ml.listing_fee_percent, ml.listed_at, ml.status,
+                       pi.item_type_id, pi.rarity,
+                       u.username as seller_name
+                FROM marketplace_listings ml
+                JOIN player_inventory pi ON ml.instance_id = pi.instance_id
+                JOIN users u ON ml.seller_id = u.user_id
+                WHERE ml.status = 'active'
+            `;
+            const params = [];
+
+            if (category) {
+                // Filter by item category would need item_types table or inline check
+                // For now, filter by item_type_id pattern
+            }
+
+            query += ' ORDER BY ml.listed_at DESC LIMIT 50';
+
+            const res = await pool.query(query, params);
+            return { listings: res.rows };
+        } catch (e) {
+            fastify.log.error('Marketplace listings error: ' + e.message);
+            return { listings: [] };
+        }
+    });
+
+    fastify.get('/api/marketplace/index-prices', async (req, reply) => {
+        try {
+            const res = await pool.query(`
+                SELECT item_type_id,
+                       AVG(price_stars) as avg_price,
+                       COUNT(*) as trade_count
+                FROM (
+                    SELECT item_type_id, price_stars,
+                           ROW_NUMBER() OVER (PARTITION BY item_type_id ORDER BY traded_at DESC) as rn
+                    FROM marketplace_trades
+                ) sub
+                WHERE rn <= 10
+                GROUP BY item_type_id
+            `);
+
+            const prices = {};
+            for (const row of res.rows) {
+                prices[row.item_type_id] = {
+                    avgPrice: parseFloat(row.avg_price) || 0,
+                    tradeCount: parseInt(row.trade_count) || 0
+                };
+            }
+
+            // Fill in base prices for items with no trades
+            for (const item of ITEM_TYPES) {
+                if (!prices[item.id]) {
+                    prices[item.id] = {
+                        avgPrice: item.base_price,
+                        tradeCount: 0
+                    };
+                }
+            }
+
+            return { prices };
+        } catch (e) {
+            fastify.log.error('Index prices error: ' + e.message);
+            return { prices: {} };
+        }
+    });
+
+    fastify.post('/api/marketplace/list', async (req, reply) => {
+        const { userId, instanceId, priceStars, feePercent } = req.body;
+        if (!userId || !instanceId || !priceStars) {
+            return reply.code(400).send({ error: 'Missing required fields' });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Verify ownership and not already listed
+            const itemRes = await client.query(
+                'SELECT * FROM player_inventory WHERE instance_id = $1 AND owner_id = $2 AND is_listed = FALSE',
+                [instanceId, userId]
+            );
+            if (itemRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Item not found or already listed' });
+            }
+
+            const listingId = generateId('lst');
+            const fee = feePercent || 5.0;
+
+            await client.query(
+                `INSERT INTO marketplace_listings (listing_id, seller_id, instance_id, price_stars, listing_fee_percent)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [listingId, userId, instanceId, priceStars, fee]
+            );
+
+            await client.query(
+                'UPDATE player_inventory SET is_listed = TRUE WHERE instance_id = $1',
+                [instanceId]
+            );
+
+            await client.query('COMMIT');
+
+            broadcastMarketplace({
+                type: 'new_listing',
+                listingId,
+                itemTypeId: itemRes.rows[0].item_type_id,
+                priceStars,
+                sellerName: userId.substring(0, 8)
+            });
+
+            return { success: true, listingId };
+        } catch (e) {
+            await client.query('ROLLBACK');
+            fastify.log.error('Marketplace list error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        } finally {
+            client.release();
+        }
+    });
+
+    fastify.post('/api/marketplace/buy', async (req, reply) => {
+        const { userId, listingId } = req.body;
+        if (!userId || !listingId) {
+            return reply.code(400).send({ error: 'Missing required fields' });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Get listing
+            const listingRes = await client.query(
+                `SELECT ml.*, pi.item_type_id, pi.rarity
+                 FROM marketplace_listings ml
+                 JOIN player_inventory pi ON ml.instance_id = pi.instance_id
+                 WHERE ml.listing_id = $1 AND ml.status = 'active'
+                 FOR UPDATE`,
+                [listingId]
+            );
+            if (listingRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Listing not found or already sold' });
+            }
+
+            const listing = listingRes.rows[0];
+
+            if (listing.seller_id === userId) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Cannot buy your own listing' });
+            }
+
+            // Check buyer has enough stars
+            const buyerRes = await client.query(
+                'SELECT stars FROM player_progress WHERE user_id = $1 FOR UPDATE',
+                [userId]
+            );
+            const buyerStars = buyerRes.rows.length > 0 ? buyerRes.rows[0].stars : 0;
+
+            if (buyerStars < listing.price_stars) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Not enough stars' });
+            }
+
+            // Calculate fee
+            const feeStars = Math.ceil(listing.price_stars * listing.listing_fee_percent / 100);
+            const sellerReceives = listing.price_stars - feeStars;
+
+            // Deduct stars from buyer
+            await client.query(
+                'UPDATE player_progress SET stars = stars - $1 WHERE user_id = $2',
+                [listing.price_stars, userId]
+            );
+
+            // Credit stars to seller (minus fee)
+            await client.query(
+                `INSERT INTO player_progress (user_id, stars)
+                 VALUES ($1, $2)
+                 ON CONFLICT (user_id) DO UPDATE SET stars = player_progress.stars + $2`,
+                [listing.seller_id, sellerReceives]
+            );
+
+            // Transfer item ownership
+            await client.query(
+                'UPDATE player_inventory SET owner_id = $1, is_listed = FALSE WHERE instance_id = $2',
+                [userId, listing.instance_id]
+            );
+
+            // Update listing status
+            await client.query(
+                "UPDATE marketplace_listings SET status = 'sold' WHERE listing_id = $1",
+                [listingId]
+            );
+
+            // Record trade
+            await client.query(
+                `INSERT INTO marketplace_trades
+                    (listing_id, buyer_id, seller_id, instance_id, item_type_id, price_stars, fee_stars)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [listingId, userId, listing.seller_id, listing.instance_id,
+                 listing.item_type_id, listing.price_stars, feeStars]
+            );
+
+            await client.query('COMMIT');
+
+            broadcastMarketplace({
+                type: 'listing_sold',
+                listingId,
+                itemTypeId: listing.item_type_id,
+                priceStars: listing.price_stars
+            });
+
+            return {
+                success: true,
+                starsSpent: listing.price_stars,
+                itemReceived: listing.instance_id
+            };
+        } catch (e) {
+            await client.query('ROLLBACK');
+            fastify.log.error('Marketplace buy error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        } finally {
+            client.release();
+        }
+    });
+
+    fastify.post('/api/marketplace/cancel', async (req, reply) => {
+        const { userId, listingId } = req.body;
+        if (!userId || !listingId) {
+            return reply.code(400).send({ error: 'Missing required fields' });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const res = await client.query(
+                `SELECT * FROM marketplace_listings
+                 WHERE listing_id = $1 AND seller_id = $2 AND status = 'active'`,
+                [listingId, userId]
+            );
+            if (res.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Listing not found' });
+            }
+
+            await client.query(
+                "UPDATE marketplace_listings SET status = 'cancelled' WHERE listing_id = $1",
+                [listingId]
+            );
+
+            await client.query(
+                'UPDATE player_inventory SET is_listed = FALSE WHERE instance_id = $1',
+                [res.rows[0].instance_id]
+            );
+
+            await client.query('COMMIT');
+            return { success: true };
+        } catch (e) {
+            await client.query('ROLLBACK');
+            fastify.log.error('Marketplace cancel error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        } finally {
+            client.release();
+        }
+    });
+
+    // ==================
+    // REST API: EVENTS
+    // ==================
+
+    fastify.get('/api/events/active', async (req, reply) => {
+        try {
+            const res = await pool.query(
+                `SELECT * FROM events
+                 WHERE status = 'active'
+                    OR (status = 'scheduled' AND start_at <= CURRENT_TIMESTAMP AND end_at > CURRENT_TIMESTAMP)
+                 ORDER BY start_at DESC`
+            );
+
+            // Auto-activate scheduled events that are now in window
+            for (const event of res.rows) {
+                if (event.status === 'scheduled') {
+                    await pool.query(
+                        "UPDATE events SET status = 'active' WHERE event_id = $1",
+                        [event.event_id]
+                    );
+                }
+            }
+
+            return { events: res.rows };
+        } catch (e) {
+            fastify.log.error('Events error: ' + e.message);
+            return { events: [] };
+        }
+    });
+
+    fastify.post('/api/events/:eventId/attempt', async (req, reply) => {
+        const { eventId } = req.params;
+        const { userId, coveragePercent } = req.body;
+        if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        try {
+            // Get event
+            const eventRes = await pool.query(
+                "SELECT * FROM events WHERE event_id = $1 AND status = 'active'",
+                [eventId]
+            );
+            if (eventRes.rows.length === 0) {
+                return reply.code(400).send({ error: 'Event not active' });
+            }
+
+            const event = eventRes.rows[0];
+
+            // Check attempts remaining
+            const attemptsRes = await pool.query(
+                'SELECT COUNT(*) as cnt FROM event_participation WHERE event_id = $1 AND user_id = $2',
+                [eventId, userId]
+            );
+            const attemptsMade = parseInt(attemptsRes.rows[0].cnt);
+
+            if (attemptsMade >= event.max_attempts) {
+                return reply.code(400).send({ error: 'No attempts remaining' });
+            }
+
+            // Roll for drop
+            const dropTable = event.drop_table || { common: 0.6, rare: 0.25, epic: 0.1, legendary: 0.05 };
+            const roll = Math.random();
+            let rarity = null;
+            let cumulative = 0;
+
+            // Higher coverage = slightly better rates
+            const coverageBonus = (coveragePercent || 0) > 0.9 ? 0.05 : 0;
+
+            for (const [r, rate] of [['legendary', dropTable.legendary], ['epic', dropTable.epic],
+                                       ['rare', dropTable.rare], ['common', dropTable.common]]) {
+                cumulative += (rate || 0) + (r !== 'common' ? coverageBonus : 0);
+                if (roll < cumulative) {
+                    rarity = r;
+                    break;
+                }
+            }
+
+            if (!rarity) rarity = 'common';
+
+            // Pick a random item of that rarity or higher
+            const rarityItems = {
+                common: ['basic_paint', 'speed_boost'],
+                rare: ['neon_paint', 'glitter_finish'],
+                epic: ['money_roller', 'blueprint_penthouse'],
+                legendary: ['diamond_roller', 'painters_crown']
+            };
+
+            const candidates = rarityItems[rarity] || rarityItems.common;
+            const chosenItemType = candidates[Math.floor(Math.random() * candidates.length)];
+
+            // Mint item
+            const instanceId = generateId('item');
+            await pool.query(
+                `INSERT INTO player_inventory (instance_id, item_type_id, rarity, owner_id)
+                 VALUES ($1, $2, $3, $4)`,
+                [instanceId, chosenItemType, rarity, userId]
+            );
+
+            // Record participation
+            await pool.query(
+                `INSERT INTO event_participation (event_id, user_id, attempt_number, coverage_percent, reward_instance_id)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [eventId, userId, attemptsMade + 1, coveragePercent || 0, instanceId]
+            );
+
+            return {
+                success: true,
+                reward: {
+                    instanceId,
+                    itemTypeId: chosenItemType,
+                    rarity,
+                },
+                attemptsRemaining: event.max_attempts - attemptsMade - 1
+            };
+        } catch (e) {
+            fastify.log.error('Event attempt error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // ==================
+    // HEALTH CHECK
+    // ==================
+
+    fastify.get('/', async (req, reply) => {
+        reply.type('text/html');
+        return '<h1>Paint Roller Server</h1><p>Server is running.</p>';
+    });
+
+    // ==================
+    // WEBSOCKET: MARKETPLACE
+    // ==================
+
+    fastify.get('/ws/marketplace', { websocket: true }, (connection, req) => {
         const socket = connection;
-        const { userId, username } = req.query;
+        const { userId } = req.query;
 
         socket.userId = userId || 'anon';
-        socket.username = username || 'Anonymous';
-
-        socket.on('message', (message) => {
-            try {
-                const data = JSON.parse(message.toString());
-                handleMessage(socket, data);
-            } catch (e) {
-                fastify.log.error('Message parse error: ' + e.message);
-            }
-        });
+        marketplaceClients.add(socket);
 
         socket.on('close', () => {
-            handleDisconnect(socket);
+            marketplaceClients.delete(socket);
         });
+
+        socket.on('message', (message) => {
+            // Marketplace WS is primarily for receiving broadcasts
+            // Could add ping/pong or subscription filtering here
+        });
+    });
+
+    // Keep legacy /ws endpoint for backward compatibility
+    fastify.get('/ws', { websocket: true }, (connection, req) => {
+        const socket = connection;
+        socket.on('close', () => {});
     });
 });
 
@@ -761,7 +730,7 @@ const start = async () => {
     try {
         const PORT = process.env.PORT || 3000;
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
-        console.log(`Pixel Duel server started on http://localhost:${PORT}`);
+        console.log(`Paint Roller server started on http://localhost:${PORT}`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
