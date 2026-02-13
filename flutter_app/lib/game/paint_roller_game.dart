@@ -38,8 +38,18 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
   double get _wallLeft => _wallMarginX;
   double get _wallTop => _wallTopMargin;
 
-  // Roller is a square sprite (600x600 PNG) — size proportional to wall
-  double get _rollerSize => (_wallWidth * 0.16).clamp(70.0, 130.0);
+  // Roller is a square sprite (600x600 PNG) — size proportional to wall.
+  // The actual roller contact line in the PNG spans x=200..400 (200px of 600px),
+  // i.e. the middle 1/3 of the sprite is the part that touches the wall.
+  static const double _rollerContactFraction = (400 - 200) / 600; // 1/3 of sprite
+
+  // Roller size scales with wall width and the "Wider Roller" upgrade.
+  // The contact line (1/3 of sprite) should cover _rollerWidthFraction of the wall.
+  // So: spriteSize * _rollerContactFraction = _rollerWidthFraction * _wallWidth
+  //     spriteSize = _rollerWidthFraction / _rollerContactFraction * _wallWidth
+  double get _rollerSize =>
+      (_rollerWidthFraction / _rollerContactFraction * _wallWidth)
+          .clamp(70.0, 400.0);
 
   PaintRollerGame();
 
@@ -107,6 +117,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     if (isMounted) {
       wall.updateColors(room.wallColor, room.dirtColor, room.paintColor);
       roller.speedMultiplier = rollerSpeedMultiplier;
+      roller.setDrawSize(_rollerSize);
       _startNewRound();
     }
   }
@@ -123,17 +134,23 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     if (!roundState.isActive) return;
 
     final rollerNorm = roller.normalizedPosition;
-    final halfWidth = _rollerWidthFraction / 2;
 
     // Trigger the roller paint stroke animation (swoosh up-down)
     roller.triggerPaintStroke();
 
+    // The paint stripe width derives from the roller sprite's contact line.
+    // In the 600x600 PNG, the contact line spans x=200..400 (1/3 of sprite).
+    final rollerContactWidth = _rollerSize * _rollerContactFraction;
+    final halfWidth = (rollerContactWidth / _wallWidth) / 2;
+
     // Add to game state (uses clamped intervals internally)
     roundState.addStripe(rollerNorm, halfWidth);
 
-    // Calculate visual stripe position, CLAMPED to wall bounds
-    final stripePixelWidth = _rollerWidthFraction * _wallWidth;
-    double stripeX = _wallLeft + rollerNorm * _wallWidth - stripePixelWidth / 2;
+    // Visual stripe matches the contact line region of the rendered sprite.
+    final stripePixelWidth = rollerContactWidth;
+    // The sprite is centered on pixelX; the contact line center is at the
+    // sprite center (x=300 in 600px), so the stripe is also centered on pixelX.
+    double stripeX = roller.pixelX - stripePixelWidth / 2;
 
     // Clamp: left edge can't go before wall, right edge can't go past wall
     final wallRight = _wallLeft + _wallWidth;

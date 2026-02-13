@@ -1,11 +1,11 @@
 {
-    "name": "flutter_app",
-    "short_name": "flutter_app",
+    "name": "One-Motion Draw",
+    "short_name": "OneMotion",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFBF5",
+    "theme_color": "#5D4E37",
+    "description": "A fun multiplayer drawing game.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
