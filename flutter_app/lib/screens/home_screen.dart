@@ -20,6 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _lastCoveragePercent = 0;
   bool _showPayoutAnim = false;
   bool _prestigeAvailable = false;
+  GameService? _gameService;
 
   @override
   void initState() {
@@ -29,8 +30,26 @@ class _HomeScreenState extends State<HomeScreen> {
     _game.onStripePainted = _onStripePainted;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _gameService = Provider.of<GameService>(context, listen: false);
+      _gameService!.addListener(_onGameServiceChanged);
       _configureGame();
     });
+  }
+
+  @override
+  void dispose() {
+    _gameService?.removeListener(_onGameServiceChanged);
+    super.dispose();
+  }
+
+  /// Called whenever GameService notifies (e.g. after purchasing an upgrade).
+  /// Updates the roller live without resetting the current round.
+  void _onGameServiceChanged() {
+    if (_gameService == null || !_game.isMounted) return;
+    _game.updateRollerSettings(
+      rollerWidthFraction: _gameService!.rollerWidthPercent,
+      rollerSpeedMultiplier: _gameService!.rollerSpeedMultiplier,
+    );
   }
 
   void _configureGame() {

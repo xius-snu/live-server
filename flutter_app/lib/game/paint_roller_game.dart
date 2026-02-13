@@ -122,6 +122,20 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     }
   }
 
+  /// Update roller parameters live (e.g. after purchasing an upgrade)
+  /// without resetting the current round.
+  void updateRollerSettings({
+    required double rollerWidthFraction,
+    required double rollerSpeedMultiplier,
+  }) {
+    _rollerWidthFraction = rollerWidthFraction;
+    _rollerSpeedMultiplier = rollerSpeedMultiplier;
+    if (isMounted) {
+      roller.speedMultiplier = rollerSpeedMultiplier;
+      roller.setDrawSize(_rollerSize);
+    }
+  }
+
   void _startNewRound() {
     children.whereType<PaintStripeComponent>().toList().forEach(remove);
     roundState.reset(_maxStrokes);
