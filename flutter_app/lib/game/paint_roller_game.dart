@@ -131,7 +131,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
   @override
   void onTapDown(TapDownEvent event) {
-    if (!roundState.isActive) return;
+    if (!roundState.isActive || roller.isPainting) return;
 
     final rollerNorm = roller.normalizedPosition;
 

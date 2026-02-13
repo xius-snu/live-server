@@ -70,12 +70,14 @@ class RollerComponent extends PositionComponent {
   /// The resting Y position (below the wall)
   double get restingY => wallTop + wallHeight + 8;
 
+  bool get isPainting => _isPainting;
+
   /// Trigger the up-down paint animation.
-  /// If already in the downswing phase, restart from current Y position.
   void triggerPaintStroke() {
+    if (_isPainting) return;
     _isPainting = true;
     _paintAnimProgress = 0;
-    _paintStartY = position.y.isNaN ? restingY : position.y;
+    _paintStartY = restingY;
     _paintEndY = wallTop - rollerDrawSize * 0.2;
   }
 
