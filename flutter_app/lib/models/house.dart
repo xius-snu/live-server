@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 enum HouseTier {
@@ -26,29 +27,61 @@ class HouseDefinition {
   final HouseTier tier;
   final String name;
   final String icon;
-  final double baseCashPerWall;
-  /// How much "bigger" this house's walls are relative to the base.
-  /// Higher scale = roller covers less of the wall at the same upgrade level,
-  /// creating natural diminishing returns per prestige tier.
-  final double wallScale;
   final List<RoomDefinition> rooms;
 
   const HouseDefinition({
     required this.tier,
     required this.name,
     required this.icon,
-    required this.baseCashPerWall,
-    this.wallScale = 1.0,
     required this.rooms,
   });
+
+  /// Wall scale derived from prestige level (exponential growth curve).
+  /// Starts flat so early houses are easy, then ramps up.
+  ///   prestige 0  -> 1.0
+  ///   prestige 5  -> 1.15
+  ///   prestige 10 -> 1.63
+  ///   prestige 15 -> 2.42
+  ///   prestige 20 -> 3.53
+  ///   prestige 30 -> 6.72
+  static double wallScaleForPrestige(int prestigeLevel) {
+    return 1.0 + 0.04 * pow(prestigeLevel, 1.6);
+  }
+
+  /// Base cash per wall scales with prestige so higher tiers reward more.
+  static double baseCashForPrestige(int prestigeLevel) {
+    return 10.0 * (1.0 + 0.5 * prestigeLevel);
+  }
+
+  /// Get the house definition for a given prestige level.
+  /// Cycles through the 5 visual tiers for room colors/names.
+  static HouseDefinition getForPrestige(int prestigeLevel) {
+    final tierIndex = prestigeLevel % HouseTier.values.length;
+    return all[tierIndex];
+  }
+
+  /// Get the display name including prestige cycle info.
+  static String nameForPrestige(int prestigeLevel) {
+    final def = getForPrestige(prestigeLevel);
+    final cycle = prestigeLevel ~/ HouseTier.values.length;
+    if (cycle == 0) return def.name;
+    return '${def.name} ${_toRoman(cycle + 1)}';
+  }
+
+  static String _toRoman(int n) {
+    if (n <= 1) return '';
+    if (n <= 3) return 'I' * n;
+    if (n == 4) return 'IV';
+    if (n <= 8) return 'V' + 'I' * (n - 5);
+    if (n == 9) return 'IX';
+    return 'X' + _toRoman(n - 10);
+  }
 
   static const List<HouseDefinition> all = [
     HouseDefinition(
       tier: HouseTier.apartment,
       name: 'Apartment',
-      icon: '🏢',
-      baseCashPerWall: 10,
-      wallScale: 1.0,
+      icon: '\u{1F3E2}',
       rooms: [
         RoomDefinition(name: 'Living Room', wallColor: Color(0xFFE8DCC8), dirtColor: Color(0xFFC4A882), paintColor: Color(0xFFF5F0E8)),
         RoomDefinition(name: 'Bedroom', wallColor: Color(0xFFD5C4A1), dirtColor: Color(0xFFB89E6E), paintColor: Color(0xFFEDE5D4)),
@@ -60,9 +93,7 @@ class HouseDefinition {
     HouseDefinition(
       tier: HouseTier.townhouse,
       name: 'Townhouse',
-      icon: '🏠',
-      baseCashPerWall: 25,
-      wallScale: 1.5,
+      icon: '\u{1F3E0}',
       rooms: [
         RoomDefinition(name: 'Foyer', wallColor: Color(0xFFCDD5D0), dirtColor: Color(0xFF99A89E), paintColor: Color(0xFFE8F0EB)),
         RoomDefinition(name: 'Dining Room', wallColor: Color(0xFFD0C8C0), dirtColor: Color(0xFFA09488), paintColor: Color(0xFFEDE8E3)),
@@ -74,9 +105,7 @@ class HouseDefinition {
     HouseDefinition(
       tier: HouseTier.villa,
       name: 'Villa',
-      icon: '🏡',
-      baseCashPerWall: 60,
-      wallScale: 2.2,
+      icon: '\u{1F3E1}',
       rooms: [
         RoomDefinition(name: 'Grand Hall', wallColor: Color(0xFFE0D0C0), dirtColor: Color(0xFFB89E82), paintColor: Color(0xFFFFF5EB)),
         RoomDefinition(name: 'Library', wallColor: Color(0xFFD0C0B0), dirtColor: Color(0xFFA88E78), paintColor: Color(0xFFF0E5DA)),
@@ -88,9 +117,7 @@ class HouseDefinition {
     HouseDefinition(
       tier: HouseTier.mansion,
       name: 'Mansion',
-      icon: '🏰',
-      baseCashPerWall: 150,
-      wallScale: 3.0,
+      icon: '\u{1F3F0}',
       rooms: [
         RoomDefinition(name: 'Ballroom', wallColor: Color(0xFFE8DDD0), dirtColor: Color(0xFFC0AA90), paintColor: Color(0xFFFFF8F0)),
         RoomDefinition(name: 'Theater', wallColor: Color(0xFFD0C0C8), dirtColor: Color(0xFFA08898), paintColor: Color(0xFFF0E5EB)),
@@ -102,9 +129,7 @@ class HouseDefinition {
     HouseDefinition(
       tier: HouseTier.skyscraper,
       name: 'Skyscraper',
-      icon: '🏙️',
-      baseCashPerWall: 400,
-      wallScale: 4.0,
+      icon: '\u{1F3D9}\u{FE0F}',
       rooms: [
         RoomDefinition(name: 'Lobby', wallColor: Color(0xFFD8D8E0), dirtColor: Color(0xFFA0A0B0), paintColor: Color(0xFFF2F2F8)),
         RoomDefinition(name: 'Penthouse', wallColor: Color(0xFFE0D8D0), dirtColor: Color(0xFFB8A898), paintColor: Color(0xFFFFF5F0)),
@@ -117,11 +142,5 @@ class HouseDefinition {
 
   static HouseDefinition getDefinition(HouseTier tier) {
     return all.firstWhere((h) => h.tier == tier);
-  }
-
-  static HouseTier? nextTier(HouseTier current) {
-    final idx = HouseTier.values.indexOf(current);
-    if (idx >= HouseTier.values.length - 1) return null;
-    return HouseTier.values[idx + 1];
   }
 }

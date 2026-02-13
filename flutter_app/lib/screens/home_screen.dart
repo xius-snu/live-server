@@ -146,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     children: [
                       Text(
-                        '${house.icon} ${house.name}',
+                        '${house.icon} ${HouseDefinition.nameForPrestige(gameService.prestigeLevel)}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -356,7 +356,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPrestigePrompt(GameService gameService) {
-    final nextTier = HouseDefinition.nextTier(gameService.currentHouse);
+    final nextPrestige = gameService.prestigeLevel + 1;
+    final nextName = HouseDefinition.nameForPrestige(nextPrestige);
+    final nextScale = HouseDefinition.wallScaleForPrestige(nextPrestige);
     return Column(
       children: [
         const SizedBox(height: 8),
@@ -386,9 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                nextTier != null
-                    ? 'Move to ${HouseDefinition.getDefinition(nextTier).name} — bigger walls!'
-                    : 'Prestige for another star!',
+                'Move to $nextName — wall scale ${nextScale.toStringAsFixed(1)}x',
                 style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
               ),
               const SizedBox(height: 4),

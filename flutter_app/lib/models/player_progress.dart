@@ -28,21 +28,24 @@ class PlayerProgress {
 
   int getUpgradeLevel(UpgradeType type) => upgradeLevels[type] ?? 0;
 
-  /// Current house's wall scale — bigger houses dilute upgrade effectiveness.
-  double get wallScale => HouseDefinition.getDefinition(currentHouse).wallScale;
+  /// Wall scale derived from prestige level (exponential growth curve).
+  double get wallScale => HouseDefinition.wallScaleForPrestige(prestigeLevel);
+
+  /// Base cash per wall derived from prestige level.
+  double get baseCashPerWall => HouseDefinition.baseCashForPrestige(prestigeLevel);
 
   int get maxStrokes => 6 + getUpgradeLevel(UpgradeType.extraStroke);
 
-  /// Roller width as fraction of wall. The raw upgrade value is divided by
-  /// wallScale so that bigger houses make the roller feel smaller.
+  /// Roller width as fraction of wall. Base is 25% so early game is generous.
+  /// The raw upgrade value is divided by wallScale so bigger houses make
+  /// the roller feel smaller — you must upgrade to keep up.
   double get rollerWidthPercent {
-    final rawWidth = 0.15 + 0.02 * getUpgradeLevel(UpgradeType.widerRoller);
+    final rawWidth = 0.25 + 0.02 * getUpgradeLevel(UpgradeType.widerRoller);
     return (rawWidth / wallScale).clamp(0.05, 0.95);
   }
 
   /// Roller speed multiplier. More levels = slower (more precise).
-  /// Uses diminishing returns: each level contributes less reduction.
-  /// Formula: speed = 1 / (1 + 0.15 * level), so it asymptotically approaches 0.
+  /// Diminishing returns: speed = 1 / (1 + 0.15 * level).
   double get rollerSpeedMultiplier {
     final level = getUpgradeLevel(UpgradeType.steadyHand);
     return 1.0 / (1.0 + 0.15 * level);
@@ -56,8 +59,11 @@ class PlayerProgress {
 
   double get marketplaceFeePercent => (5 - getUpgradeLevel(UpgradeType.brokerLicense)).toDouble().clamp(2.0, 5.0);
 
+  /// The current house definition (cycles through tiers based on prestige).
+  HouseDefinition get currentHouseDef => HouseDefinition.getForPrestige(prestigeLevel);
+
   bool get canPrestige {
-    final house = HouseDefinition.getDefinition(currentHouse);
+    final house = currentHouseDef;
     return currentRoom >= house.rooms.length - 1;
   }
 

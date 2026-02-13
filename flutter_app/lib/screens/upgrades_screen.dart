@@ -240,7 +240,9 @@ class _PrestigeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nextTier = HouseDefinition.nextTier(gameService.currentHouse);
+    final nextPrestige = gameService.prestigeLevel + 1;
+    final nextName = HouseDefinition.nameForPrestige(nextPrestige);
+    final nextScale = HouseDefinition.wallScaleForPrestige(nextPrestige);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -269,9 +271,7 @@ class _PrestigeCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              nextTier != null
-                  ? 'Earn 1 star (+10% cash) • Unlock ${HouseDefinition.getDefinition(nextTier).name} (bigger walls!)'
-                  : 'Earn 1 star (+10% cash)',
+              'Earn 1 star (+10% cash) • Next: $nextName (${nextScale.toStringAsFixed(1)}x walls)',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 12,
@@ -313,13 +313,19 @@ class _HouseProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final prestige = gameService.prestigeLevel;
+    final currentName = HouseDefinition.nameForPrestige(prestige);
+    final currentDef = HouseDefinition.getForPrestige(prestige);
+    final wallScale = HouseDefinition.wallScaleForPrestige(prestige);
+    final roomProgress = '${gameService.currentRoom + 1}/${currentDef.rooms.length}';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'HOUSE PROGRESS',
+            'PROGRESSION',
             style: TextStyle(
               color: Colors.white.withOpacity(0.4),
               fontSize: 11,
@@ -328,57 +334,43 @@ class _HouseProgress extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: HouseTier.values.map((tier) {
-              final def = HouseDefinition.getDefinition(tier);
-              final isCurrent = tier == gameService.currentHouse;
-              final isUnlocked = tier.index <= gameService.currentHouse.index;
-              final isCompleted = tier.index < gameService.currentHouse.index;
-
-              return Expanded(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isCurrent
-                        ? const Color(0xFF3B82F6).withOpacity(0.15)
-                        : isCompleted
-                            ? const Color(0xFF4ADE80).withOpacity(0.1)
-                            : Colors.white.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isCurrent
-                          ? const Color(0xFF3B82F6).withOpacity(0.4)
-                          : isCompleted
-                              ? const Color(0xFF4ADE80).withOpacity(0.3)
-                              : Colors.white.withOpacity(0.08),
-                    ),
-                  ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16213E),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2A3A5E)),
+            ),
+            child: Row(
+              children: [
+                Text(currentDef.icon, style: const TextStyle(fontSize: 28)),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        def.icon,
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: isUnlocked ? null : Colors.white24,
+                        currentName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
-                        def.name.substring(0, 3),
+                        'Room $roomProgress  •  Wall scale ${wallScale.toStringAsFixed(2)}x  •  Prestige $prestige',
                         style: TextStyle(
-                          color: isUnlocked ? Colors.white54 : Colors.white24,
-                          fontSize: 9,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 11,
                         ),
                       ),
-                      if (isCompleted)
-                        const Icon(Icons.check, color: Color(0xFF4ADE80), size: 12),
                     ],
                   ),
                 ),
-              );
-            }).toList(),
+              ],
+            ),
           ),
         ],
       ),

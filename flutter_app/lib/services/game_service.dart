@@ -23,7 +23,7 @@ class GameService extends ChangeNotifier {
   double get rollerSpeedMultiplier => _progress.rollerSpeedMultiplier;
   bool get canPrestige => _progress.canPrestige;
 
-  HouseDefinition get currentHouseDef => HouseDefinition.getDefinition(_progress.currentHouse);
+  HouseDefinition get currentHouseDef => _progress.currentHouseDef;
   RoomDefinition get currentRoomDef => currentHouseDef.rooms[_progress.currentRoom];
 
   Future<void> init() async {
@@ -49,8 +49,7 @@ class GameService extends ChangeNotifier {
   /// Uses continuous coverage scaling: reward = baseCash * coverage^1.5
   /// so partial coverage earns proportionally less.
   double completePaintRound(double coverage) {
-    final house = HouseDefinition.getDefinition(_progress.currentHouse);
-    final baseCash = house.baseCashPerWall;
+    final baseCash = _progress.baseCashPerWall;
 
     // Continuous coverage scaling: coverage^1.5
     // 100% -> 1.0x, 80% -> 0.72x, 50% -> 0.35x, 10% -> 0.03x
@@ -73,7 +72,7 @@ class GameService extends ChangeNotifier {
 
   /// Advance to the next room. Returns true if prestige is now available.
   bool advanceRoom() {
-    final house = HouseDefinition.getDefinition(_progress.currentHouse);
+    final house = _progress.currentHouseDef;
     if (_progress.currentRoom < house.rooms.length - 1) {
       _progress.currentRoom++;
       _saveLocally();
@@ -107,18 +106,16 @@ class GameService extends ChangeNotifier {
     return _progress.cash >= def.costForLevel(currentLevel);
   }
 
-  /// Prestige: gain a star, advance house tier. Cash and upgrades persist.
+  /// Prestige: gain a star, advance to next house. Cash and upgrades persist.
+  /// House tiers cycle for visual variety; wallScale grows from prestigeLevel.
   void prestige() {
-    final nextHouse = HouseDefinition.nextTier(_progress.currentHouse);
-
     _progress.stars++;
     _progress.prestigeLevel++;
     _progress.currentRoom = 0;
 
-    if (nextHouse != null) {
-      _progress.currentHouse = nextHouse;
-    }
-    // If at max house tier, stay there but still gain stars
+    // Cycle through house tiers for visual variety
+    final tierIndex = _progress.prestigeLevel % HouseTier.values.length;
+    _progress.currentHouse = HouseTier.values[tierIndex];
 
     _progress.lastOnlineAt = DateTime.now();
     _saveLocally();
