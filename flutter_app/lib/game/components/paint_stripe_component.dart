@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 class PaintStripeComponent extends PositionComponent {
   final Color paintColor;
   double _animProgress = 0;
-  static const double _animDuration = 0.15; // seconds
+  // Match the roller's upswing duration (0.35 of 0.3s paint anim)
+  static const double _animDuration = 0.105; // seconds
 
   PaintStripeComponent({
     required this.paintColor,
@@ -22,13 +23,14 @@ class PaintStripeComponent extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
-    final animatedWidth = size.x * _animProgress;
-    final xOffset = (size.x - animatedWidth) / 2;
+    // Paint grows from bottom to top, matching the roller sweeping upward
+    final animatedHeight = size.y * _animProgress;
+    final yOffset = size.y - animatedHeight;
 
     // Main paint stripe
     final paint = Paint()..color = paintColor.withOpacity(0.85);
     final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(xOffset, 0, animatedWidth, size.y),
+      Rect.fromLTWH(0, yOffset, size.x, animatedHeight),
       const Radius.circular(1),
     );
     canvas.drawRRect(rect, paint);
@@ -39,13 +41,13 @@ class PaintStripeComponent extends PositionComponent {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     canvas.drawLine(
-      Offset(xOffset, 0),
-      Offset(xOffset, size.y),
+      Offset(0, yOffset),
+      Offset(0, size.y),
       edgePaint,
     );
     canvas.drawLine(
-      Offset(xOffset + animatedWidth, 0),
-      Offset(xOffset + animatedWidth, size.y),
+      Offset(size.x, yOffset),
+      Offset(size.x, size.y),
       edgePaint,
     );
   }
