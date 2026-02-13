@@ -34,7 +34,7 @@ class UpgradesScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Resets on prestige  •  Star multiplier: ${gameService.progress.starMultiplier.toStringAsFixed(1)}x',
+                          'Star multiplier: ${gameService.progress.starMultiplier.toStringAsFixed(1)}x  •  Wall scale: ${gameService.progress.wallScale.toStringAsFixed(1)}x',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.4),
                             fontSize: 12,
@@ -91,7 +91,7 @@ class _UpgradeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final level = gameService.progress.getUpgradeLevel(definition.type);
-    final isMaxed = level >= definition.maxLevel;
+    final isMaxed = definition.isMaxed(level);
     final cost = isMaxed ? 0.0 : definition.costForLevel(level);
     final canAfford = gameService.canAffordUpgrade(definition.type);
 
@@ -139,7 +139,7 @@ class _UpgradeTile extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Lv.$level/${definition.maxLevel}',
+                      definition.isUncapped ? 'Lv.$level' : 'Lv.$level/${definition.maxLevel}',
                       style: TextStyle(
                         color: isMaxed
                             ? const Color(0xFFF5C842)
@@ -150,20 +150,21 @@ class _UpgradeTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
-                // Progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: level / definition.maxLevel,
-                    backgroundColor: const Color(0xFF2A3A5E),
-                    valueColor: AlwaysStoppedAnimation(
-                      isMaxed
-                          ? const Color(0xFFF5C842)
-                          : const Color(0xFF3B82F6),
+                // Progress bar (for capped upgrades only)
+                if (!definition.isUncapped)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: level / definition.maxLevel,
+                      backgroundColor: const Color(0xFF2A3A5E),
+                      valueColor: AlwaysStoppedAnimation(
+                        isMaxed
+                            ? const Color(0xFFF5C842)
+                            : const Color(0xFF3B82F6),
+                      ),
+                      minHeight: 4,
                     ),
-                    minHeight: 4,
                   ),
-                ),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -269,8 +270,8 @@ class _PrestigeCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               nextTier != null
-                  ? 'Reset all progress • Earn 1 star • Unlock ${HouseDefinition.getDefinition(nextTier).name}'
-                  : 'Reset all progress • Earn 1 star',
+                  ? 'Earn 1 star (+10% cash) • Unlock ${HouseDefinition.getDefinition(nextTier).name} (bigger walls!)'
+                  : 'Earn 1 star (+10% cash)',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 12,

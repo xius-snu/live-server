@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/player_progress.dart';
@@ -45,24 +46,20 @@ class GameService extends ChangeNotifier {
   }
 
   /// Complete a paint round. Returns the cash earned.
+  /// Uses continuous coverage scaling: reward = baseCash * coverage^1.5
+  /// so partial coverage earns proportionally less.
   double completePaintRound(double coverage) {
     final house = HouseDefinition.getDefinition(_progress.currentHouse);
     final baseCash = house.baseCashPerWall;
 
-    // Coverage bonus
-    int coverageBonus = 1;
-    if (coverage >= 1.0) {
-      coverageBonus = 5;
-    } else if (coverage >= 0.95) {
-      coverageBonus = 3;
-    } else if (coverage >= 0.90) {
-      coverageBonus = 2;
-    }
+    // Continuous coverage scaling: coverage^1.5
+    // 100% -> 1.0x, 80% -> 0.72x, 50% -> 0.35x, 10% -> 0.03x
+    final coverageFactor = pow(coverage.clamp(0.0, 1.0), 1.5).toDouble();
 
     final payout = baseCash *
+        coverageFactor *
         _progress.starMultiplier *
-        _progress.cashPerTapMultiplier *
-        coverageBonus;
+        _progress.cashPerTapMultiplier;
 
     _progress.cash += payout;
     _progress.totalCashEarned += payout;
@@ -91,7 +88,7 @@ class GameService extends ChangeNotifier {
   bool purchaseUpgrade(UpgradeType type) {
     final def = UpgradeDefinition.getDefinition(type);
     final currentLevel = _progress.getUpgradeLevel(type);
-    if (currentLevel >= def.maxLevel) return false;
+    if (def.isMaxed(currentLevel)) return false;
 
     final cost = def.costForLevel(currentLevel);
     if (_progress.cash < cost) return false;
@@ -106,19 +103,17 @@ class GameService extends ChangeNotifier {
   bool canAffordUpgrade(UpgradeType type) {
     final def = UpgradeDefinition.getDefinition(type);
     final currentLevel = _progress.getUpgradeLevel(type);
-    if (currentLevel >= def.maxLevel) return false;
+    if (def.isMaxed(currentLevel)) return false;
     return _progress.cash >= def.costForLevel(currentLevel);
   }
 
-  /// Prestige: reset cash & upgrades, gain a star, advance house tier.
+  /// Prestige: gain a star, advance house tier. Cash and upgrades persist.
   void prestige() {
     final nextHouse = HouseDefinition.nextTier(_progress.currentHouse);
 
-    _progress.cash = 0;
     _progress.stars++;
     _progress.prestigeLevel++;
     _progress.currentRoom = 0;
-    _progress.upgradeLevels.clear();
 
     if (nextHouse != null) {
       _progress.currentHouse = nextHouse;

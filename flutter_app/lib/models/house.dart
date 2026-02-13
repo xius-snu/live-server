@@ -27,6 +27,10 @@ class HouseDefinition {
   final String name;
   final String icon;
   final double baseCashPerWall;
+  /// How much "bigger" this house's walls are relative to the base.
+  /// Higher scale = roller covers less of the wall at the same upgrade level,
+  /// creating natural diminishing returns per prestige tier.
+  final double wallScale;
   final List<RoomDefinition> rooms;
 
   const HouseDefinition({
@@ -34,6 +38,7 @@ class HouseDefinition {
     required this.name,
     required this.icon,
     required this.baseCashPerWall,
+    this.wallScale = 1.0,
     required this.rooms,
   });
 
@@ -43,6 +48,7 @@ class HouseDefinition {
       name: 'Apartment',
       icon: '🏢',
       baseCashPerWall: 10,
+      wallScale: 1.0,
       rooms: [
         RoomDefinition(name: 'Living Room', wallColor: Color(0xFFE8DCC8), dirtColor: Color(0xFFC4A882), paintColor: Color(0xFFF5F0E8)),
         RoomDefinition(name: 'Bedroom', wallColor: Color(0xFFD5C4A1), dirtColor: Color(0xFFB89E6E), paintColor: Color(0xFFEDE5D4)),
@@ -56,6 +62,7 @@ class HouseDefinition {
       name: 'Townhouse',
       icon: '🏠',
       baseCashPerWall: 25,
+      wallScale: 1.5,
       rooms: [
         RoomDefinition(name: 'Foyer', wallColor: Color(0xFFCDD5D0), dirtColor: Color(0xFF99A89E), paintColor: Color(0xFFE8F0EB)),
         RoomDefinition(name: 'Dining Room', wallColor: Color(0xFFD0C8C0), dirtColor: Color(0xFFA09488), paintColor: Color(0xFFEDE8E3)),
@@ -69,6 +76,7 @@ class HouseDefinition {
       name: 'Villa',
       icon: '🏡',
       baseCashPerWall: 60,
+      wallScale: 2.2,
       rooms: [
         RoomDefinition(name: 'Grand Hall', wallColor: Color(0xFFE0D0C0), dirtColor: Color(0xFFB89E82), paintColor: Color(0xFFFFF5EB)),
         RoomDefinition(name: 'Library', wallColor: Color(0xFFD0C0B0), dirtColor: Color(0xFFA88E78), paintColor: Color(0xFFF0E5DA)),
@@ -82,6 +90,7 @@ class HouseDefinition {
       name: 'Mansion',
       icon: '🏰',
       baseCashPerWall: 150,
+      wallScale: 3.0,
       rooms: [
         RoomDefinition(name: 'Ballroom', wallColor: Color(0xFFE8DDD0), dirtColor: Color(0xFFC0AA90), paintColor: Color(0xFFFFF8F0)),
         RoomDefinition(name: 'Theater', wallColor: Color(0xFFD0C0C8), dirtColor: Color(0xFFA08898), paintColor: Color(0xFFF0E5EB)),
@@ -95,6 +104,7 @@ class HouseDefinition {
       name: 'Skyscraper',
       icon: '🏙️',
       baseCashPerWall: 400,
+      wallScale: 4.0,
       rooms: [
         RoomDefinition(name: 'Lobby', wallColor: Color(0xFFD8D8E0), dirtColor: Color(0xFFA0A0B0), paintColor: Color(0xFFF2F2F8)),
         RoomDefinition(name: 'Penthouse', wallColor: Color(0xFFE0D8D0), dirtColor: Color(0xFFB8A898), paintColor: Color(0xFFFFF5F0)),

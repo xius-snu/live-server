@@ -171,10 +171,8 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
     // Check if round is over
     if (!roundState.isActive) {
-      final bonus = roundState.getCoverageBonus();
-      roundState.coverageBonusMultiplier = bonus;
       roundState.showingResults = true;
-      onRoundComplete?.call(roundState.coveragePercent, bonus);
+      onRoundComplete?.call(roundState.coveragePercent, roundState.getCoverageDisplayPercent());
     }
   }
 }

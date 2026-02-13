@@ -28,13 +28,24 @@ class PlayerProgress {
 
   int getUpgradeLevel(UpgradeType type) => upgradeLevels[type] ?? 0;
 
+  /// Current house's wall scale — bigger houses dilute upgrade effectiveness.
+  double get wallScale => HouseDefinition.getDefinition(currentHouse).wallScale;
+
   int get maxStrokes => 6 + getUpgradeLevel(UpgradeType.extraStroke);
 
-  double get rollerWidthPercent => 0.15 + 0.02 * getUpgradeLevel(UpgradeType.widerRoller);
+  /// Roller width as fraction of wall. The raw upgrade value is divided by
+  /// wallScale so that bigger houses make the roller feel smaller.
+  double get rollerWidthPercent {
+    final rawWidth = 0.15 + 0.02 * getUpgradeLevel(UpgradeType.widerRoller);
+    return (rawWidth / wallScale).clamp(0.05, 0.95);
+  }
 
+  /// Roller speed multiplier. More levels = slower (more precise).
+  /// Uses diminishing returns: each level contributes less reduction.
+  /// Formula: speed = 1 / (1 + 0.15 * level), so it asymptotically approaches 0.
   double get rollerSpeedMultiplier {
-    final reduction = 0.07 * getUpgradeLevel(UpgradeType.steadyHand);
-    return 1.0 - reduction.clamp(0.0, 0.35);
+    final level = getUpgradeLevel(UpgradeType.steadyHand);
+    return 1.0 / (1.0 + 0.15 * level);
   }
 
   double get cashPerTapMultiplier => 1.0 + 0.10 * getUpgradeLevel(UpgradeType.turboSpeed);

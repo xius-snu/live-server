@@ -14,6 +14,7 @@ class UpgradeDefinition {
   final String name;
   final String icon;
   final String description;
+  /// Max level. -1 means uncapped (infinite).
   final int maxLevel;
   final double baseCost;
   final double costMultiplier;
@@ -30,19 +31,26 @@ class UpgradeDefinition {
     required this.effectPerLevel,
   });
 
+  bool get isUncapped => maxLevel == -1;
+
+  bool isMaxed(int level) => !isUncapped && level >= maxLevel;
+
   double costForLevel(int level) {
-    if (level >= maxLevel) return double.infinity;
+    if (!isUncapped && level >= maxLevel) return double.infinity;
     return (baseCost * pow(costMultiplier, level)).roundToDouble();
   }
 
   String cumulativeEffect(int level) {
     switch (type) {
       case UpgradeType.widerRoller:
+        // Diminishing: each level adds less. Total = 0.15 + sum of diminishing increments.
+        // Effective extra width % = level * 2, but actual effect is divided by wallScale.
         return '+${level * 2}% width';
       case UpgradeType.turboSpeed:
         return '+${level * 10}% cash';
       case UpgradeType.steadyHand:
-        return '-${level * 7}% speed';
+        final reduction = (level * 7).clamp(0, 70);
+        return '-$reduction% speed';
       case UpgradeType.autoPainter:
         return '\$${level * 2}/sec';
       case UpgradeType.extraStroke:
@@ -56,9 +64,9 @@ class UpgradeDefinition {
     UpgradeDefinition(
       type: UpgradeType.widerRoller,
       name: 'Wider Roller',
-      icon: '🖌️',
+      icon: '\u{1F58C}\u{FE0F}',
       description: 'Paint wider stripes',
-      maxLevel: 10,
+      maxLevel: -1, // uncapped
       baseCost: 50,
       costMultiplier: 1.8,
       effectPerLevel: '+2% width',
@@ -66,9 +74,9 @@ class UpgradeDefinition {
     UpgradeDefinition(
       type: UpgradeType.turboSpeed,
       name: 'Turbo Speed',
-      icon: '⚡',
+      icon: '\u26A1',
       description: 'Earn more cash per tap',
-      maxLevel: 10,
+      maxLevel: -1, // uncapped
       baseCost: 30,
       costMultiplier: 1.5,
       effectPerLevel: '+10% cash/tap',
@@ -76,9 +84,9 @@ class UpgradeDefinition {
     UpgradeDefinition(
       type: UpgradeType.steadyHand,
       name: 'Steady Hand',
-      icon: '🎯',
+      icon: '\u{1F3AF}',
       description: 'Slower roller for precision',
-      maxLevel: 5,
+      maxLevel: -1, // uncapped
       baseCost: 100,
       costMultiplier: 2.0,
       effectPerLevel: '-7% speed',
@@ -86,9 +94,9 @@ class UpgradeDefinition {
     UpgradeDefinition(
       type: UpgradeType.autoPainter,
       name: 'Auto-Painter',
-      icon: '🤖',
+      icon: '\u{1F916}',
       description: 'Earn cash while away',
-      maxLevel: 10,
+      maxLevel: -1, // uncapped
       baseCost: 150,
       costMultiplier: 2.0,
       effectPerLevel: '+\$2/sec idle',
@@ -96,7 +104,7 @@ class UpgradeDefinition {
     UpgradeDefinition(
       type: UpgradeType.extraStroke,
       name: 'Extra Stroke',
-      icon: '➕',
+      icon: '\u2795',
       description: 'More taps per wall',
       maxLevel: 3,
       baseCost: 500,
@@ -106,7 +114,7 @@ class UpgradeDefinition {
     UpgradeDefinition(
       type: UpgradeType.brokerLicense,
       name: 'Broker License',
-      icon: '📋',
+      icon: '\u{1F4CB}',
       description: 'Lower marketplace fees',
       maxLevel: 3,
       baseCost: 300,

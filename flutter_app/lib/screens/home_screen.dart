@@ -17,7 +17,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late PaintRollerGame _game;
   bool _roundComplete = false;
   double _lastPayout = 0;
-  int _lastBonus = 1;
+  int _lastCoveragePercent = 0;
   bool _showPayoutAnim = false;
   bool _prestigeAvailable = false;
 
@@ -55,14 +55,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  void _onRoundComplete(double coverage, int bonus) {
+  void _onRoundComplete(double coverage, int coveragePercent) {
     final gameService = Provider.of<GameService>(context, listen: false);
     final payout = gameService.completePaintRound(coverage);
 
     setState(() {
       _roundComplete = true;
       _lastPayout = payout;
-      _lastBonus = bonus;
+      _lastCoveragePercent = coveragePercent;
       _showPayoutAnim = true;
     });
 
@@ -297,27 +297,21 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_lastBonus > 1)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5C842).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFF5C842).withOpacity(0.4)),
-                ),
-                child: Text(
-                  '${_lastBonus}x BONUS!',
-                  style: const TextStyle(
-                    color: Color(0xFFF5C842),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-          ],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: _getCoverageColor(_lastCoveragePercent / 100).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _getCoverageColor(_lastCoveragePercent / 100).withOpacity(0.4)),
+          ),
+          child: Text(
+            '$_lastCoveragePercent% coverage',
+            style: TextStyle(
+              color: _getCoverageColor(_lastCoveragePercent / 100),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -374,13 +368,13 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               Text(
                 nextTier != null
-                    ? 'Prestige to unlock ${HouseDefinition.getDefinition(nextTier).name}'
+                    ? 'Move to ${HouseDefinition.getDefinition(nextTier).name} — bigger walls!'
                     : 'Prestige for another star!',
                 style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
               ),
               const SizedBox(height: 4),
               Text(
-                'All cash & upgrades will reset. You earn 1 star.',
+                'Earn 1 star (+10% cash). Walls get bigger — upgrade to keep up!',
                 style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
               ),
               const SizedBox(height: 12),

@@ -70,11 +70,9 @@ class GameRoundState {
     return totalCoverage.clamp(0.0, 1.0);
   }
 
-  int getCoverageBonus() {
-    final coverage = coveragePercent;
-    if (coverage >= 1.0) return 5;
-    if (coverage >= 0.95) return 3;
-    if (coverage >= 0.90) return 2;
-    return 1;
+  /// Coverage bonus is now continuous — stored as percentage (0-100) for display.
+  /// The actual reward scaling (coverage^1.5) is handled by GameService.
+  int getCoverageDisplayPercent() {
+    return (coveragePercent * 100).round();
   }
 }
