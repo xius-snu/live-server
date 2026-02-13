@@ -1,11 +1,11 @@
 {
-    "name": "One-Motion Draw",
-    "short_name": "OneMotion",
+    "name": "Paint Roller",
+    "short_name": "PaintRoller",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFBF5",
-    "theme_color": "#5D4E37",
-    "description": "A fun multiplayer drawing game.",
+    "background_color": "#1A1A2E",
+    "theme_color": "#1A1A2E",
+    "description": "Paint Roller - Idle Clicker Game",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
