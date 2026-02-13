@@ -80,7 +80,7 @@ fastify.register(async function (fastify) {
             cash DOUBLE PRECISION DEFAULT 0,
             stars INTEGER DEFAULT 0,
             prestige_level INTEGER DEFAULT 0,
-            current_house TEXT DEFAULT 'apartment',
+            current_house TEXT DEFAULT 'dirtHouse',
             current_room INTEGER DEFAULT 0,
             upgrades JSONB DEFAULT '{}',
             total_walls_painted INTEGER DEFAULT 0,
@@ -213,7 +213,7 @@ fastify.register(async function (fastify) {
                     total_walls_painted = $8, total_cash_earned = $9,
                     last_online_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
             `, [userId, cash || 0, stars || 0, prestigeLevel || 0,
-                currentHouse || 'apartment', currentRoom || 0,
+                currentHouse || 'dirtHouse', currentRoom || 0,
                 JSON.stringify(upgrades || {}),
                 totalWallsPainted || 0, totalCashEarned || 0]);
 
@@ -235,7 +235,7 @@ fastify.register(async function (fastify) {
             if (res.rows.length === 0) {
                 return {
                     cash: 0, stars: 0, prestigeLevel: 0,
-                    currentHouse: 'apartment', currentRoom: 0,
+                    currentHouse: 'dirtHouse', currentRoom: 0,
                     upgrades: {}, totalWallsPainted: 0, totalCashEarned: 0,
                     idleIncome: 0
                 };
@@ -257,7 +257,7 @@ fastify.register(async function (fastify) {
                 cash: (row.cash || 0) + idleIncome,
                 stars: row.stars || 0,
                 prestigeLevel: row.prestige_level || 0,
-                currentHouse: row.current_house || 'apartment',
+                currentHouse: row.current_house || 'dirtHouse',
                 currentRoom: row.current_room || 0,
                 upgrades: upgrades,
                 totalWallsPainted: row.total_walls_painted || 0,
@@ -267,7 +267,7 @@ fastify.register(async function (fastify) {
             };
         } catch (e) {
             fastify.log.error('Progress load error: ' + e.message);
-            return { cash: 0, stars: 0, prestigeLevel: 0, currentHouse: 'apartment',
+            return { cash: 0, stars: 0, prestigeLevel: 0, currentHouse: 'dirtHouse',
                      currentRoom: 0, upgrades: {}, idleIncome: 0 };
         }
     });

@@ -58,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: const Color(0xFF1A1A2E),
       body: Consumer2<UserService, GameService>(
         builder: (context, userService, gameService, _) {
-          final house = HouseDefinition.getDefinition(gameService.currentHouse);
+          final house = HouseDefinition.getByType(gameService.currentHouse);
 
           return SingleChildScrollView(
             child: SafeArea(

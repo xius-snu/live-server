@@ -6,7 +6,7 @@ class PlayerProgress {
   double cash;
   int stars;
   int prestigeLevel;
-  HouseTier currentHouse;
+  HouseType currentHouse;
   int currentRoom; // 0-4
   Map<UpgradeType, int> upgradeLevels;
   DateTime lastOnlineAt;
@@ -17,7 +17,7 @@ class PlayerProgress {
     this.cash = 0,
     this.stars = 0,
     this.prestigeLevel = 0,
-    this.currentHouse = HouseTier.apartment,
+    this.currentHouse = HouseType.dirtHouse,
     this.currentRoom = 0,
     Map<UpgradeType, int>? upgradeLevels,
     DateTime? lastOnlineAt,
@@ -59,8 +59,8 @@ class PlayerProgress {
 
   double get marketplaceFeePercent => (5 - getUpgradeLevel(UpgradeType.brokerLicense)).toDouble().clamp(2.0, 5.0);
 
-  /// The current house definition (cycles through tiers based on prestige).
-  HouseDefinition get currentHouseDef => HouseDefinition.getForPrestige(prestigeLevel);
+  /// The current house definition.
+  HouseDefinition get currentHouseDef => HouseDefinition.getByType(currentHouse);
 
   bool get canPrestige {
     final house = currentHouseDef;
@@ -91,9 +91,9 @@ class PlayerProgress {
       }
     }
 
-    HouseTier house = HouseTier.apartment;
+    HouseType house = HouseType.dirtHouse;
     try {
-      house = HouseTier.values.firstWhere((h) => h.name == json['currentHouse']);
+      house = HouseType.values.firstWhere((h) => h.name == json['currentHouse']);
     } catch (_) {}
 
     return PlayerProgress(

@@ -16,7 +16,7 @@ class GameService extends ChangeNotifier {
   double get cash => _progress.cash;
   int get stars => _progress.stars;
   int get prestigeLevel => _progress.prestigeLevel;
-  HouseTier get currentHouse => _progress.currentHouse;
+  HouseType get currentHouse => _progress.currentHouse;
   int get currentRoom => _progress.currentRoom;
   int get maxStrokes => _progress.maxStrokes;
   double get rollerWidthPercent => _progress.rollerWidthPercent;
@@ -28,6 +28,13 @@ class GameService extends ChangeNotifier {
 
   Future<void> init() async {
     await _loadLocally();
+    // Fresh player: assign a random starting house
+    if (_progress.prestigeLevel == 0 && _progress.totalWallsPainted == 0) {
+      final rng = Random();
+      final startingHouse = HouseDefinition.selectRandomHouse(0, rng);
+      _progress.currentHouse = startingHouse.type;
+      await _saveLocally();
+    }
     _initialized = true;
     notifyListeners();
   }
@@ -107,15 +114,18 @@ class GameService extends ChangeNotifier {
   }
 
   /// Prestige: gain a star, advance to next house. Cash and upgrades persist.
-  /// House tiers cycle for visual variety; wallScale grows from prestigeLevel.
+  /// House is randomly selected, weighted toward recently-unlocked tiers.
   void prestige() {
     _progress.stars++;
     _progress.prestigeLevel++;
     _progress.currentRoom = 0;
 
-    // Cycle through house tiers for visual variety
-    final tierIndex = _progress.prestigeLevel % HouseTier.values.length;
-    _progress.currentHouse = HouseTier.values[tierIndex];
+    // Random house selection weighted toward higher tiers
+    final rng = Random();
+    final newHouse = HouseDefinition.selectRandomHouse(
+      _progress.prestigeLevel, rng,
+    );
+    _progress.currentHouse = newHouse.type;
 
     _progress.lastOnlineAt = DateTime.now();
     _saveLocally();

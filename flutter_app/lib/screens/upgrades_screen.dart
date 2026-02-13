@@ -241,7 +241,6 @@ class _PrestigeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nextPrestige = gameService.prestigeLevel + 1;
-    final nextName = HouseDefinition.nameForPrestige(nextPrestige);
     final nextScale = HouseDefinition.wallScaleForPrestige(nextPrestige);
 
     return Padding(
@@ -271,7 +270,7 @@ class _PrestigeCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Earn 1 star (+10% cash) • Next: $nextName (${nextScale.toStringAsFixed(1)}x walls)',
+              'Earn 1 star (+10% cash) • Next house: ${nextScale.toStringAsFixed(1)}x walls',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 12,
@@ -295,7 +294,7 @@ class _PrestigeCard extends StatelessWidget {
                   ),
                 ),
                 child: const Text(
-                  'PRESTIGE NOW',
+                  'NEXT HOUSE',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                 ),
               ),
@@ -314,8 +313,8 @@ class _HouseProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prestige = gameService.prestigeLevel;
-    final currentName = HouseDefinition.nameForPrestige(prestige);
-    final currentDef = HouseDefinition.getForPrestige(prestige);
+    final currentDef = gameService.currentHouseDef;
+    final currentName = currentDef.name;
     final wallScale = HouseDefinition.wallScaleForPrestige(prestige);
     final roomProgress = '${gameService.currentRoom + 1}/${currentDef.rooms.length}';
 
