@@ -814,9 +814,17 @@ fastify.register(async function (fastify) {
                 [weekId, startsAt.toISOString(), endsAt.toISOString()]
             );
 
-            // Get username
+            // Ensure user exists (auto-register if they haven't set a username yet)
             const userRes = await pool.query('SELECT username FROM users WHERE user_id = $1', [userId]);
-            const username = userRes.rows.length > 0 ? userRes.rows[0].username : 'Painter';
+            let username = 'Painter';
+            if (userRes.rows.length > 0) {
+                username = userRes.rows[0].username;
+            } else {
+                await pool.query(
+                    `INSERT INTO users (user_id, username) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+                    [userId, username]
+                );
+            }
 
             // Upsert participant
             await pool.query(

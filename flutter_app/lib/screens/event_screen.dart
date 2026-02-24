@@ -651,7 +651,17 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: lb.loading ? null : () => lb.joinWeek(),
+                        onPressed: lb.joining ? null : () async {
+                          final ok = await lb.joinWeek();
+                          if (!ok && context.mounted && lb.lastError != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(lb.lastError!),
+                                backgroundColor: Colors.red.shade700,
+                              ),
+                            );
+                          }
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF5C842),
                           foregroundColor: Colors.black,
@@ -663,7 +673,7 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                               borderRadius: BorderRadius.circular(14)),
                         ),
                         child: Text(
-                          lb.loading
+                          lb.joining
                               ? 'JOINING...'
                               : 'JOIN LEADERBOARD',
                           style: const TextStyle(

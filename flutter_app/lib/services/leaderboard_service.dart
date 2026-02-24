@@ -62,7 +62,9 @@ class LeaderboardService extends ChangeNotifier {
 
   // State
   bool _loading = false;
+  bool _joining = false;
   bool _joined = false;
+  String? _lastError;
   String _weekId = '';
   DateTime? _startsAt;
   DateTime? _endsAt;
@@ -78,7 +80,9 @@ class LeaderboardService extends ChangeNotifier {
 
   // Getters
   bool get loading => _loading;
+  bool get joining => _joining;
   bool get joined => _joined;
+  String? get lastError => _lastError;
   String get weekId => _weekId;
   DateTime? get startsAt => _startsAt;
   DateTime? get endsAt => _endsAt;
@@ -97,7 +101,7 @@ class LeaderboardService extends ChangeNotifier {
     if (_userId == null) return;
     try {
       final uri = Uri.parse('$_baseUrl/api/leaderboard/status?userId=$_userId');
-      final res = await http.get(uri);
+      final res = await http.get(uri).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         _joined = data['joined'] == true;
@@ -111,23 +115,38 @@ class LeaderboardService extends ChangeNotifier {
 
   /// Join the current week's leaderboard.
   Future<bool> joinWeek() async {
-    if (_userId == null) return false;
+    if (_userId == null) {
+      _lastError = 'Not signed in yet. Try again in a moment.';
+      notifyListeners();
+      return false;
+    }
+    _joining = true;
+    _lastError = null;
+    notifyListeners();
+
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/api/leaderboard/join'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': _userId}),
-      );
+      ).timeout(const Duration(seconds: 15));
       if (res.statusCode == 200) {
         _joined = true;
+        _joining = false;
         notifyListeners();
         // Fetch full data after joining
         await fetchLeaderboard();
         return true;
       }
+      _lastError = 'Server error (${res.statusCode}). Try again.';
+      _joining = false;
+      notifyListeners();
       return false;
     } catch (e) {
       debugPrint('Leaderboard join error: $e');
+      _lastError = 'Could not reach server. Check connection and retry.';
+      _joining = false;
+      notifyListeners();
       return false;
     }
   }
@@ -140,7 +159,7 @@ class LeaderboardService extends ChangeNotifier {
 
     try {
       final uri = Uri.parse('$_baseUrl/api/leaderboard/current?userId=$_userId');
-      final res = await http.get(uri);
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         _weekId = data['weekId'] as String? ?? '';
