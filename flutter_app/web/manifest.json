@@ -1,11 +1,11 @@
 {
-    "name": "Paint Roller",
-    "short_name": "PaintRoller",
+    "name": "Rich Roller",
+    "short_name": "RichRoller",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1A1A2E",
     "theme_color": "#1A1A2E",
-    "description": "Paint Roller - Idle Clicker Game",
+    "description": "Rich Roller - Idle Clicker Game",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

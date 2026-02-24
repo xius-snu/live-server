@@ -44,6 +44,8 @@ dependencies:
   device_info_plus: ^10.1.2
   flutter_secure_storage: ^9.2.2
   crypto: ^3.0.3
+  audioplayers: ^6.1.0
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -81,6 +83,9 @@ flutter:
   assets:
     - assets/images/
     - assets/images/rollers/
+    - assets/images/home/
+    - assets/images/UI/
+    - assets/sfx/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

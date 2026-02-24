@@ -9,7 +9,7 @@ class MarketplaceItemType {
   final ItemRarity baseRarity;
   final String description;
   final String source;
-  final int basePrice; // base star price for index calculation
+  final int basePrice; // base gem price for index calculation
 
   const MarketplaceItemType({
     required this.id,
@@ -175,7 +175,7 @@ class MarketplaceListing {
   final String sellerId;
   final String sellerName;
   final SerializedItem item;
-  final int priceStars;
+  final int priceGems;
   final double feePercent;
   final DateTime listedAt;
   final String status; // 'active', 'sold', 'cancelled'
@@ -185,14 +185,14 @@ class MarketplaceListing {
     required this.sellerId,
     required this.sellerName,
     required this.item,
-    required this.priceStars,
+    required this.priceGems,
     required this.feePercent,
     required this.listedAt,
     this.status = 'active',
   });
 
-  int get feeStars => (priceStars * feePercent / 100).ceil();
-  int get sellerReceives => priceStars - feeStars;
+  int get feeGems => (priceGems * feePercent / 100).ceil();
+  int get sellerReceives => priceGems - feeGems;
 
   factory MarketplaceListing.fromJson(Map<String, dynamic> json) {
     return MarketplaceListing(
@@ -200,7 +200,7 @@ class MarketplaceListing {
       sellerId: json['sellerId'] ?? json['seller_id'] ?? '',
       sellerName: json['sellerName'] ?? json['seller_name'] ?? 'Unknown',
       item: SerializedItem.fromJson(json['item'] ?? json),
-      priceStars: json['priceStars'] ?? json['price_stars'] ?? 0,
+      priceGems: json['priceGems'] ?? json['price_stars'] ?? 0,
       feePercent: (json['feePercent'] ?? json['listing_fee_percent'] ?? 5.0).toDouble(),
       listedAt: json['listedAt'] != null
           ? DateTime.tryParse(json['listedAt']) ?? DateTime.now()

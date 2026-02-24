@@ -59,6 +59,91 @@ function generateId(prefix = 'id') {
 }
 
 // ============================================
+// LEADERBOARD HELPERS
+// ============================================
+
+/** Returns ISO week string like '2026-W09' for the current UTC date. */
+function getCurrentWeekId() {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    // ISO week: Monday is day 1
+    const dayNum = d.getUTCDay() || 7; // Sunday=7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Thursday of this week
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+/** Returns {startsAt, endsAt} Date objects for the given week ID. */
+function getWeekBounds(weekId) {
+    const [yearStr, wStr] = weekId.split('-W');
+    const year = parseInt(yearStr);
+    const week = parseInt(wStr);
+    // Jan 4 is always in ISO week 1
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const dayOfWeek = jan4.getUTCDay() || 7;
+    const mondayOfWeek1 = new Date(jan4);
+    mondayOfWeek1.setUTCDate(jan4.getUTCDate() - dayOfWeek + 1);
+    const startsAt = new Date(mondayOfWeek1);
+    startsAt.setUTCDate(mondayOfWeek1.getUTCDate() + (week - 1) * 7);
+    const endsAt = new Date(startsAt);
+    endsAt.setUTCDate(startsAt.getUTCDate() + 7);
+    return { startsAt, endsAt };
+}
+
+// ============================================
+// LEADERBOARD CACHE (in-memory, 60-min TTL)
+// ============================================
+
+const leaderboardCache = {}; // { weekId: { data, fetchedAt } }
+const LEADERBOARD_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
+let leaderboardRefreshLock = false;
+
+async function refreshLeaderboardCache(weekId) {
+    const categories = ['weekly_coverage', 'weekly_coins_earned', 'weekly_walls_painted'];
+    const result = {};
+    for (const col of categories) {
+        const res = await pool.query(
+            `SELECT user_id, username, ${col} as value
+             FROM leaderboard_participants
+             WHERE week_id = $1
+             ORDER BY ${col} DESC
+             LIMIT 100`,
+            [weekId]
+        );
+        result[col] = res.rows.map((r, i) => ({
+            rank: i + 1,
+            userId: r.user_id,
+            username: r.username,
+            value: parseFloat(r.value) || 0,
+        }));
+    }
+    const now = Date.now();
+    leaderboardCache[weekId] = { data: result, fetchedAt: now };
+    return { data: result, fetchedAt: now };
+}
+
+async function getOrRefreshCache(weekId) {
+    const cached = leaderboardCache[weekId];
+    const now = Date.now();
+    if (cached && (now - cached.fetchedAt) < LEADERBOARD_CACHE_TTL_MS) {
+        return cached;
+    }
+    // Prevent thundering herd
+    if (leaderboardRefreshLock) {
+        // Return stale data if available, or empty
+        if (cached) return cached;
+        return { data: { weekly_coverage: [], weekly_coins_earned: [], weekly_walls_painted: [] }, fetchedAt: now };
+    }
+    leaderboardRefreshLock = true;
+    try {
+        return await refreshLeaderboardCache(weekId);
+    } finally {
+        leaderboardRefreshLock = false;
+    }
+}
+
+// ============================================
 // SERVER SETUP
 // ============================================
 
@@ -141,6 +226,26 @@ fastify.register(async function (fastify) {
             completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(event_id, user_id, attempt_number)
         );
+
+        CREATE TABLE IF NOT EXISTS leaderboard_weeks (
+            week_id TEXT PRIMARY KEY,
+            starts_at TIMESTAMP NOT NULL,
+            ends_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS leaderboard_participants (
+            id SERIAL PRIMARY KEY,
+            week_id TEXT NOT NULL REFERENCES leaderboard_weeks(week_id),
+            user_id TEXT NOT NULL REFERENCES users(user_id),
+            username TEXT NOT NULL,
+            weekly_coverage DOUBLE PRECISION DEFAULT 0,
+            weekly_coins_earned DOUBLE PRECISION DEFAULT 0,
+            weekly_walls_painted INTEGER DEFAULT 0,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(week_id, user_id)
+        );
     `);
 
     // Safe migrations for new columns
@@ -148,6 +253,9 @@ fastify.register(async function (fastify) {
         await pool.query('CREATE INDEX IF NOT EXISTS idx_listings_status ON marketplace_listings(status)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_inventory_owner ON player_inventory(owner_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_trades_item ON marketplace_trades(item_type_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_lb_coverage ON leaderboard_participants(week_id, weekly_coverage DESC)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_lb_coins ON leaderboard_participants(week_id, weekly_coins_earned DESC)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_lb_walls ON leaderboard_participants(week_id, weekly_walls_painted DESC)');
         console.log('Schema migration complete');
     } catch (e) {
         console.log('Schema migration note:', e.message);
@@ -682,6 +790,155 @@ fastify.register(async function (fastify) {
         } catch (e) {
             fastify.log.error('Event attempt error: ' + e.message);
             return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // ==================
+    // REST API: LEADERBOARD
+    // ==================
+
+    // Join current week's leaderboard
+    fastify.post('/api/leaderboard/join', async (req, reply) => {
+        const { userId } = req.body;
+        if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        try {
+            const weekId = getCurrentWeekId();
+            const { startsAt, endsAt } = getWeekBounds(weekId);
+
+            // Upsert week row
+            await pool.query(
+                `INSERT INTO leaderboard_weeks (week_id, starts_at, ends_at)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (week_id) DO NOTHING`,
+                [weekId, startsAt.toISOString(), endsAt.toISOString()]
+            );
+
+            // Get username
+            const userRes = await pool.query('SELECT username FROM users WHERE user_id = $1', [userId]);
+            const username = userRes.rows.length > 0 ? userRes.rows[0].username : 'Painter';
+
+            // Upsert participant
+            await pool.query(
+                `INSERT INTO leaderboard_participants (week_id, user_id, username)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (week_id, user_id) DO NOTHING`,
+                [weekId, userId, username]
+            );
+
+            return { success: true, weekId };
+        } catch (e) {
+            fastify.log.error('Leaderboard join error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Submit round stats (fire-and-forget from client)
+    fastify.post('/api/leaderboard/submit', async (req, reply) => {
+        const { userId, coverage, coinsEarned } = req.body;
+        if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        try {
+            const weekId = getCurrentWeekId();
+
+            // Only update if the player has joined this week
+            const res = await pool.query(
+                `UPDATE leaderboard_participants
+                 SET weekly_coverage = weekly_coverage + $1,
+                     weekly_coins_earned = weekly_coins_earned + $2,
+                     weekly_walls_painted = weekly_walls_painted + 1,
+                     last_submitted_at = CURRENT_TIMESTAMP
+                 WHERE week_id = $3 AND user_id = $4`,
+                [coverage || 0, coinsEarned || 0, weekId, userId]
+            );
+
+            return { success: true, updated: res.rowCount > 0 };
+        } catch (e) {
+            fastify.log.error('Leaderboard submit error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Get current leaderboard (cached)
+    fastify.get('/api/leaderboard/current', async (req, reply) => {
+        const { userId } = req.query;
+
+        try {
+            const weekId = getCurrentWeekId();
+            const { startsAt, endsAt } = getWeekBounds(weekId);
+            const cached = await getOrRefreshCache(weekId);
+
+            const now = Date.now();
+            const nextRefreshIn = Math.max(0, Math.ceil((LEADERBOARD_CACHE_TTL_MS - (now - cached.fetchedAt)) / 1000));
+            const lastUpdatedAgo = Math.floor((now - cached.fetchedAt) / 1000);
+
+            // Find player's own stats + rank in each category
+            let playerStats = null;
+            if (userId) {
+                const pRes = await pool.query(
+                    `SELECT weekly_coverage, weekly_coins_earned, weekly_walls_painted
+                     FROM leaderboard_participants
+                     WHERE week_id = $1 AND user_id = $2`,
+                    [weekId, userId]
+                );
+                if (pRes.rows.length > 0) {
+                    const p = pRes.rows[0];
+                    // Compute ranks from cached data
+                    const findRank = (col, val) => {
+                        const list = cached.data[col] || [];
+                        const idx = list.findIndex(r => r.userId === userId);
+                        if (idx >= 0) return idx + 1;
+                        // Not in top 100 — count how many are above
+                        const above = list.filter(r => r.value > val).length;
+                        return above + 1; // approximate
+                    };
+                    playerStats = {
+                        weeklyCoverage: parseFloat(p.weekly_coverage) || 0,
+                        weeklyCoinsEarned: parseFloat(p.weekly_coins_earned) || 0,
+                        weeklyWallsPainted: parseInt(p.weekly_walls_painted) || 0,
+                        coverageRank: findRank('weekly_coverage', parseFloat(p.weekly_coverage) || 0),
+                        coinsRank: findRank('weekly_coins_earned', parseFloat(p.weekly_coins_earned) || 0),
+                        wallsRank: findRank('weekly_walls_painted', parseInt(p.weekly_walls_painted) || 0),
+                    };
+                }
+            }
+
+            return {
+                weekId,
+                startsAt: startsAt.toISOString(),
+                endsAt: endsAt.toISOString(),
+                nextRefreshIn,
+                lastUpdatedAgo,
+                coverage: cached.data.weekly_coverage || [],
+                coins: cached.data.weekly_coins_earned || [],
+                walls: cached.data.weekly_walls_painted || [],
+                playerStats,
+            };
+        } catch (e) {
+            fastify.log.error('Leaderboard current error: ' + e.message);
+            return {
+                weekId: getCurrentWeekId(),
+                coverage: [], coins: [], walls: [],
+                nextRefreshIn: 3600, lastUpdatedAgo: 0, playerStats: null,
+            };
+        }
+    });
+
+    // Lightweight join-check
+    fastify.get('/api/leaderboard/status', async (req, reply) => {
+        const { userId } = req.query;
+        if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        try {
+            const weekId = getCurrentWeekId();
+            const res = await pool.query(
+                'SELECT 1 FROM leaderboard_participants WHERE week_id = $1 AND user_id = $2',
+                [weekId, userId]
+            );
+            return { weekId, joined: res.rows.length > 0 };
+        } catch (e) {
+            fastify.log.error('Leaderboard status error: ' + e.message);
+            return { weekId: getCurrentWeekId(), joined: false };
         }
     });
 

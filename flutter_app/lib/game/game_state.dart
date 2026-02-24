@@ -1,13 +1,10 @@
 import 'dart:math';
 
 class PaintStripe {
-  final double center; // 0.0 to 1.0 across the wall
-  final double halfWidth; // half the stripe width as fraction of wall
+  final double left;  // 0.0 to 1.0, left edge on wall
+  final double right; // 0.0 to 1.0, right edge on wall
 
-  const PaintStripe({required this.center, required this.halfWidth});
-
-  double get left => (center - halfWidth).clamp(0.0, 1.0);
-  double get right => (center + halfWidth).clamp(0.0, 1.0);
+  const PaintStripe({required this.left, required this.right});
 }
 
 class GameRoundState {
@@ -18,16 +15,16 @@ class GameRoundState {
   bool showingResults = false;
   double lastPayout = 0;
   int coverageBonusMultiplier = 1;
-
   GameRoundState({required this.maxStrokes}) : strokesRemaining = maxStrokes;
 
   double get coveragePercent => _calculateCoverage();
 
   int get strokesUsed => maxStrokes - strokesRemaining;
 
-  void addStripe(double center, double halfWidth) {
-    if (strokesRemaining <= 0 || !isActive) return;
-    stripes.add(PaintStripe(center: center, halfWidth: halfWidth));
+  void addStripe(double left, double right) {
+    if (!isActive) return;
+    if (strokesRemaining <= 0) return;
+    stripes.add(PaintStripe(left: left, right: right));
     strokesRemaining--;
     if (strokesRemaining <= 0) {
       isActive = false;

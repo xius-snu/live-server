@@ -4,48 +4,65 @@ import 'house.dart';
 
 class PlayerProgress {
   double cash;
-  int stars;
-  int prestigeLevel;
-  HouseType currentHouse;
-  int currentRoom; // 0-4
+  int gems;
+  /// Global house level (1-based). Determines which house type + cycle level.
+  int houseLevel;
+  /// Roller upgrade level (0-based, like other upgrades).
+  int rollerLevel;
   Map<UpgradeType, int> upgradeLevels;
   DateTime lastOnlineAt;
   int totalWallsPainted;
   double totalCashEarned;
+  int streak; // consecutive walls with coverage bonus, tiered (7/10 max)
+  double totalCoverageAccumulated; // sum of all wall coverages for averaging
+  Set<String> ownedSkins;
+  String equippedSkin;
 
   PlayerProgress({
     this.cash = 0,
-    this.stars = 0,
-    this.prestigeLevel = 0,
-    this.currentHouse = HouseType.dirtHouse,
-    this.currentRoom = 0,
+    this.gems = 0,
+    this.houseLevel = 1,
+    this.rollerLevel = 0,
     Map<UpgradeType, int>? upgradeLevels,
     DateTime? lastOnlineAt,
     this.totalWallsPainted = 0,
     this.totalCashEarned = 0,
+    this.streak = 0,
+    this.totalCoverageAccumulated = 0,
+    Set<String>? ownedSkins,
+    this.equippedSkin = 'default',
   })  : upgradeLevels = upgradeLevels ?? {},
-        lastOnlineAt = lastOnlineAt ?? DateTime.now();
+        lastOnlineAt = lastOnlineAt ?? DateTime.now(),
+        ownedSkins = ownedSkins ?? {'default'};
 
   int getUpgradeLevel(UpgradeType type) => upgradeLevels[type] ?? 0;
 
-  /// Wall scale derived from prestige level (exponential growth curve).
-  double get wallScale => HouseDefinition.wallScaleForPrestige(prestigeLevel);
+  /// Current house definition based on house level.
+  HouseDefinition get currentHouseDef =>
+      HouseDefinition.getForHouseLevel(houseLevel);
 
-  /// Base cash per wall derived from prestige level.
-  double get baseCashPerWall => HouseDefinition.baseCashForPrestige(prestigeLevel);
+  /// Current house type derived from house level.
+  HouseType get currentHouse => currentHouseDef.type;
+
+  /// Display name like "Cabin Lv. 2"
+  String get houseDisplayName =>
+      HouseDefinition.displayNameForHouseLevel(houseLevel);
+
+  /// Wall scale for the current house level.
+  double get wallScale =>
+      HouseDefinition.wallScaleForHouseLevel(houseLevel);
+
+  /// Base cash per wall derived from house level.
+  double get baseCashPerWall =>
+      HouseDefinition.baseCashForHouseLevel(houseLevel);
 
   int get maxStrokes => 6 + getUpgradeLevel(UpgradeType.extraStroke);
 
-  /// Roller width as fraction of wall. Base is 25% so early game is generous.
-  /// The raw upgrade value is divided by wallScale so bigger houses make
-  /// the roller feel smaller — you must upgrade to keep up.
-  double get rollerWidthPercent {
-    final rawWidth = 0.25 + 0.02 * getUpgradeLevel(UpgradeType.widerRoller);
-    return (rawWidth / wallScale).clamp(0.05, 0.95);
-  }
+  /// Roller width as fraction of wall. Derived from roller level and house level.
+  double get rollerWidthPercent =>
+      HouseDefinition.rollerWidthPercent(rollerLevel, houseLevel);
 
   /// Roller speed multiplier. More levels = slower (more precise).
-  /// Diminishing returns: speed = 1 / (1 + 0.15 * level).
   double get rollerSpeedMultiplier {
     final level = getUpgradeLevel(UpgradeType.steadyHand);
     return 1.0 / (1.0 + 0.15 * level);
@@ -55,28 +72,44 @@ class PlayerProgress {
 
   double get idleIncomePerSecond => 2.0 * getUpgradeLevel(UpgradeType.autoPainter);
 
-  double get starMultiplier => 1.0 + 0.10 * stars;
-
   double get marketplaceFeePercent => (5 - getUpgradeLevel(UpgradeType.brokerLicense)).toDouble().clamp(2.0, 5.0);
 
-  /// The current house definition.
-  HouseDefinition get currentHouseDef => HouseDefinition.getByType(currentHouse);
+  /// Cost to upgrade to the next house level.
+  double get houseUpgradeCost =>
+      HouseDefinition.houseUpgradeCost(houseLevel);
 
-  bool get canPrestige {
-    final house = currentHouseDef;
-    return currentRoom >= house.rooms.length - 1;
-  }
+  /// Cost to upgrade roller to next level.
+  double get rollerUpgradeCost =>
+      HouseDefinition.rollerUpgradeCost(rollerLevel);
+
+  /// Whether house can be upgraded (coupling constraint).
+  bool get canUpgradeHouseLevel =>
+      HouseDefinition.canUpgradeHouse(houseLevel, rollerLevel);
+
+  /// Whether roller can be upgraded (coupling constraint).
+  bool get canUpgradeRollerLevel =>
+      HouseDefinition.canUpgradeRoller(rollerLevel, houseLevel);
+
+  /// Average wall coverage across all painted walls.
+  double get averageCoverage =>
+      totalWallsPainted > 0 ? totalCoverageAccumulated / totalWallsPainted : 0.0;
+
+  /// Cycle level display (e.g. "Lv. 2" part of "Cabin Lv. 2")
+  int get houseCycleLevel => HouseDefinition.cycleLevelFor(houseLevel);
 
   Map<String, dynamic> toJson() => {
         'cash': cash,
-        'stars': stars,
-        'prestigeLevel': prestigeLevel,
-        'currentHouse': currentHouse.name,
-        'currentRoom': currentRoom,
+        'gems': gems,
+        'houseLevel': houseLevel,
+        'rollerLevel': rollerLevel,
         'upgradeLevels': upgradeLevels.map((k, v) => MapEntry(k.name, v)),
         'lastOnlineAt': lastOnlineAt.toIso8601String(),
         'totalWallsPainted': totalWallsPainted,
         'totalCashEarned': totalCashEarned,
+        'streak': streak,
+        'totalCoverageAccumulated': totalCoverageAccumulated,
+        'ownedSkins': ownedSkins.toList(),
+        'equippedSkin': equippedSkin,
       };
 
   factory PlayerProgress.fromJson(Map<String, dynamic> json) {
@@ -91,23 +124,39 @@ class PlayerProgress {
       }
     }
 
-    HouseType house = HouseType.dirtHouse;
-    try {
-      house = HouseType.values.firstWhere((h) => h.name == json['currentHouse']);
-    } catch (_) {}
+    // Migration: convert old prestige/houseUpgradeLevel to new houseLevel
+    int houseLevel = json['houseLevel'] as int? ?? 1;
+    if (houseLevel < 1) {
+      // Migrate from old system: use houseUpgradeLevel or prestigeLevel
+      final oldPrestige = json['prestigeLevel'] as int? ?? 0;
+      final oldHouseUpgrade = json['houseUpgradeLevel'] as int? ?? oldPrestige;
+      houseLevel = (oldHouseUpgrade + 1).clamp(1, 9999);
+    }
+
+    // Migration: convert old widerRoller upgrade level to rollerLevel
+    int rollerLevel = json['rollerLevel'] as int? ?? 0;
+    if (json['rollerLevel'] == null && upgradeMap.containsKey(UpgradeType.widerRoller)) {
+      rollerLevel = upgradeMap[UpgradeType.widerRoller] ?? 0;
+      upgradeMap.remove(UpgradeType.widerRoller);
+    }
 
     return PlayerProgress(
       cash: (json['cash'] as num?)?.toDouble() ?? 0,
-      stars: json['stars'] as int? ?? 0,
-      prestigeLevel: json['prestigeLevel'] as int? ?? 0,
-      currentHouse: house,
-      currentRoom: json['currentRoom'] as int? ?? 0,
+      gems: json['gems'] as int? ?? json['stars'] as int? ?? 0,
+      houseLevel: houseLevel,
+      rollerLevel: rollerLevel,
       upgradeLevels: upgradeMap,
       lastOnlineAt: json['lastOnlineAt'] != null
           ? DateTime.tryParse(json['lastOnlineAt']) ?? DateTime.now()
           : DateTime.now(),
       totalWallsPainted: json['totalWallsPainted'] as int? ?? 0,
       totalCashEarned: (json['totalCashEarned'] as num?)?.toDouble() ?? 0,
+      streak: json['streak'] as int? ?? 0,
+      totalCoverageAccumulated: (json['totalCoverageAccumulated'] as num?)?.toDouble() ?? 0,
+      ownedSkins: json['ownedSkins'] != null
+          ? Set<String>.from(json['ownedSkins'] as List)
+          : {'default'},
+      equippedSkin: json['equippedSkin'] as String? ?? 'default',
     );
   }
 

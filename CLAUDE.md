@@ -59,7 +59,7 @@ LiveServer/
 
 ### Progression (Infinite, No Resets)
 - **Upgrades persist forever** across prestige, never reset
-- **Prestige** = complete 5 rooms -> earn 1 star, advance to next house tier
+- **Prestige** = optional after completing 5 rooms, costs `500 * 1.8^level` cash -> earn 1 star, advance to next house tier. Or just continue replaying the same house for free.
 - **Wall scale** = `1.0 + 0.04 * prestige^1.6` (exponential growth curve)
   - Prestige 0: 1.0x, Prestige 5: 1.48x, Prestige 10: 2.26x, Prestige 20: 4.83x
 - **Base cash** = `10 * (1 + 0.5 * prestige)` scales linearly

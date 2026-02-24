@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/game_service.dart';
-import '../models/upgrade.dart';
 import '../models/house.dart';
 
 class UpgradesScreen extends StatelessWidget {
@@ -11,7 +10,7 @@ class UpgradesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: const Color(0xFFE8D5B8),
       body: Consumer<GameService>(
         builder: (context, gameService, _) {
           return CustomScrollView(
@@ -27,17 +26,9 @@ class UpgradesScreen extends StatelessWidget {
                         const Text(
                           'Upgrades',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF6B5038),
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Star multiplier: ${gameService.progress.starMultiplier.toStringAsFixed(1)}x  •  Wall scale: ${gameService.progress.wallScale.toStringAsFixed(1)}x',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
-                            fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -46,32 +37,9 @@ class UpgradesScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (index < UpgradeDefinition.all.length) {
-                        final def = UpgradeDefinition.all[index];
-                        return _UpgradeTile(
-                          definition: def,
-                          gameService: gameService,
-                        );
-                      }
-                      return null;
-                    },
-                    childCount: UpgradeDefinition.all.length,
-                  ),
-                ),
-              ),
-              // Prestige section
-              if (gameService.canPrestige)
-                SliverToBoxAdapter(
-                  child: _PrestigeCard(gameService: gameService),
-                ),
-              // House progress
+              // House Level + Roller Level cards
               SliverToBoxAdapter(
-                child: _HouseProgress(gameService: gameService),
+                child: _ProgressionCards(gameService: gameService),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
@@ -82,143 +50,321 @@ class UpgradesScreen extends StatelessWidget {
   }
 }
 
-class _UpgradeTile extends StatelessWidget {
-  final UpgradeDefinition definition;
+class _ProgressionCards extends StatelessWidget {
   final GameService gameService;
-
-  const _UpgradeTile({required this.definition, required this.gameService});
+  const _ProgressionCards({required this.gameService});
 
   @override
   Widget build(BuildContext context) {
-    final level = gameService.progress.getUpgradeLevel(definition.type);
-    final isMaxed = definition.isMaxed(level);
-    final cost = isMaxed ? 0.0 : definition.costForLevel(level);
-    final canAfford = gameService.canAffordUpgrade(definition.type);
+    final progress = gameService.progress;
+    final houseCost = progress.houseUpgradeCost;
+    final rollerCost = progress.rollerUpgradeCost;
+    final canAffordHouse = gameService.canAffordHouseUpgrade;
+    final canAffordRoller = gameService.canAffordRollerUpgrade;
+    final houseBlocked = gameService.houseLevelBlocked;
+    final rollerBlocked = gameService.rollerLevelBlocked;
+
+    // Current house info
+    final currentHouseDef = gameService.currentHouseDef;
+    final currentCycleLevel = HouseDefinition.cycleLevelFor(progress.houseLevel);
+    final currentWallArea = HouseDefinition.wallAreaDisplay(progress.houseLevel);
+
+    // Next house info
+    final nextHouseLevel = progress.houseLevel + 1;
+    final nextHouseDef = HouseDefinition.getForHouseLevel(nextHouseLevel);
+    final nextCycleLevel = HouseDefinition.cycleLevelFor(nextHouseLevel);
+    final nextWallArea = HouseDefinition.wallAreaDisplay(nextHouseLevel);
+
+    // Current roller info
+    final currentRollerWidth = HouseDefinition.rollerWidthDisplay(
+      progress.rollerLevel, progress.houseLevel,
+    );
+    final nextRollerWidth = HouseDefinition.rollerWidthDisplay(
+      progress.rollerLevel + 1, progress.houseLevel,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          // House Level card
+          _ProgressionCard(
+            title: 'HOUSE LEVEL',
+            icon: currentHouseDef.icon,
+            level: progress.houseLevel,
+            currentName: '${currentHouseDef.name} ${HouseDefinition.toRoman(currentCycleLevel)}',
+            currentSize: currentWallArea,
+            nextName: '${nextHouseDef.name} ${HouseDefinition.toRoman(nextCycleLevel)}',
+            nextSize: nextWallArea,
+            cost: houseCost,
+            canAfford: canAffordHouse,
+            isBlocked: houseBlocked,
+            blockedMessage: 'Roller too far behind (max ${HouseDefinition.maxLevelDiff} lvl diff)',
+            onUpgrade: () {
+              HapticFeedback.heavyImpact();
+              gameService.upgradeHouse();
+            },
+            accentColor: const Color(0xFFF5C842),
+          ),
+          const SizedBox(height: 12),
+          // Roller Level card
+          _ProgressionCard(
+            title: 'ROLLER SIZE',
+            icon: '\u{1F58C}\u{FE0F}',
+            level: progress.rollerLevel,
+            currentName: '',
+            currentSize: currentRollerWidth,
+            nextName: '',
+            nextSize: nextRollerWidth,
+            cost: rollerCost,
+            canAfford: canAffordRoller,
+            isBlocked: rollerBlocked,
+            blockedMessage: 'House too far behind (max ${HouseDefinition.maxLevelDiff} lvl diff)',
+            onUpgrade: () {
+              HapticFeedback.heavyImpact();
+              gameService.upgradeRoller();
+            },
+            accentColor: const Color(0xFF3B82F6),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressionCard extends StatelessWidget {
+  final String title;
+  final String icon;
+  final int level;
+  final String currentName; // e.g. "Townhouse II" or empty for roller
+  final String currentSize; // e.g. "46m²" or "0.8m"
+  final String nextName;
+  final String nextSize;
+  final double cost;
+  final bool canAfford;
+  final bool isBlocked;
+  final String blockedMessage;
+  final VoidCallback onUpgrade;
+  final Color accentColor;
+
+  const _ProgressionCard({
+    required this.title,
+    required this.icon,
+    required this.level,
+    required this.currentName,
+    required this.currentSize,
+    required this.nextName,
+    required this.nextSize,
+    required this.cost,
+    required this.canAfford,
+    required this.isBlocked,
+    required this.blockedMessage,
+    required this.onUpgrade,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isHouse = currentName.isNotEmpty;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isMaxed
-              ? const Color(0xFFF5C842).withOpacity(0.3)
-              : const Color(0xFF2A3A5E),
-        ),
+        color: const Color(0xFF5A4230),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withOpacity(0.35)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          // Icon
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: Text(definition.icon, style: const TextStyle(fontSize: 24)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Title row with level and size
+          Row(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      definition.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+                    // Title + Level
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: accentColor,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Lv. $level',
+                            style: TextStyle(
+                              color: accentColor,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      definition.isUncapped ? 'Lv.$level' : 'Lv.$level/${definition.maxLevel}',
-                      style: TextStyle(
-                        color: isMaxed
-                            ? const Color(0xFFF5C842)
-                            : Colors.white.withOpacity(0.4),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                // Progress bar (for capped upgrades only)
-                if (!definition.isUncapped)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: level / definition.maxLevel,
-                      backgroundColor: const Color(0xFF2A3A5E),
-                      valueColor: AlwaysStoppedAnimation(
-                        isMaxed
-                            ? const Color(0xFFF5C842)
-                            : const Color(0xFF3B82F6),
-                      ),
-                      minHeight: 4,
-                    ),
-                  ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isMaxed ? 'MAXED' : 'Next: ${definition.effectPerLevel}',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.35),
-                        fontSize: 11,
-                      ),
-                    ),
-                    if (level > 0)
+                    const SizedBox(height: 4),
+                    // House name (if house) + size
+                    if (isHouse)
+                      Row(
+                        children: [
+                          Text(
+                            currentName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              currentSize,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
                       Text(
-                        'Total: ${definition.cumulativeEffect(level)}',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.35),
-                          fontSize: 11,
+                        currentSize,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
                         ),
                       ),
                   ],
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Next level preview
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.arrow_upward_rounded, size: 16, color: accentColor.withOpacity(0.7)),
+                const SizedBox(width: 8),
+                Text(
+                  'Next:',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.4),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                if (isHouse && nextName.isNotEmpty) ...[
+                  Text(
+                    nextName,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  nextSize,
+                  style: TextStyle(
+                    color: accentColor.withOpacity(0.8),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Lv. ${level + 1}',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.35),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          // Buy button
-          GestureDetector(
-            onTap: canAfford
-                ? () {
-                    HapticFeedback.mediumImpact();
-                    gameService.purchaseUpgrade(definition.type);
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isMaxed
-                    ? const Color(0xFFF5C842).withOpacity(0.15)
-                    : canAfford
-                        ? const Color(0xFF4ADE80)
-                        : const Color(0xFF2A3A5E),
-                borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 12),
+          // Blocked warning
+          if (isBlocked)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, size: 14, color: Colors.red.shade300),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      blockedMessage,
+                      style: TextStyle(
+                        color: Colors.red.shade300,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              child: Text(
-                isMaxed ? 'MAX' : '\$${_formatCost(cost)}',
-                style: TextStyle(
-                  color: isMaxed
-                      ? const Color(0xFFF5C842)
-                      : canAfford
-                          ? Colors.black
-                          : Colors.white.withOpacity(0.3),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+            ),
+          // Upgrade button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: canAfford ? onUpgrade : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: Colors.black,
+                disabledBackgroundColor: accentColor.withOpacity(0.20),
+                disabledForegroundColor: Colors.white38,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/UI/coin250.png',
+                    width: 20,
+                    height: 20,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _formatCost(cost),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ],
               ),
             ),
           ),
@@ -228,151 +374,12 @@ class _UpgradeTile extends StatelessWidget {
   }
 
   String _formatCost(double cost) {
-    if (cost >= 1000000) return '${(cost / 1000000).toStringAsFixed(1)}M';
-    if (cost >= 1000) return '${(cost / 1000).toStringAsFixed(1)}K';
-    return cost.toStringAsFixed(0);
-  }
-}
-
-class _PrestigeCard extends StatelessWidget {
-  final GameService gameService;
-  const _PrestigeCard({required this.gameService});
-
-  @override
-  Widget build(BuildContext context) {
-    final nextPrestige = gameService.prestigeLevel + 1;
-    final nextScale = HouseDefinition.wallScaleForPrestige(nextPrestige);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFFF5C842).withOpacity(0.12),
-              const Color(0xFFE94560).withOpacity(0.12),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF5C842).withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            const Text(
-              'PRESTIGE AVAILABLE',
-              style: TextStyle(
-                color: Color(0xFFF5C842),
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Earn 1 star (+10% cash) • Next house: ${nextScale.toStringAsFixed(1)}x walls',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 12,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.heavyImpact();
-                  gameService.prestige();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF5C842),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'NEXT HOUSE',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HouseProgress extends StatelessWidget {
-  final GameService gameService;
-  const _HouseProgress({required this.gameService});
-
-  @override
-  Widget build(BuildContext context) {
-    final prestige = gameService.prestigeLevel;
-    final currentDef = gameService.currentHouseDef;
-    final currentName = currentDef.name;
-    final wallScale = HouseDefinition.wallScaleForPrestige(prestige);
-    final roomProgress = '${gameService.currentRoom + 1}/${currentDef.rooms.length}';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'PROGRESSION',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.4),
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF16213E),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF2A3A5E)),
-            ),
-            child: Row(
-              children: [
-                Text(currentDef.icon, style: const TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        currentName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Room $roomProgress  •  Wall scale ${wallScale.toStringAsFixed(2)}x  •  Prestige $prestige',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final whole = cost.toStringAsFixed(0);
+    final buf = StringBuffer();
+    for (int i = 0; i < whole.length; i++) {
+      if (i > 0 && (whole.length - i) % 3 == 0) buf.write(',');
+      buf.write(whole[i]);
+    }
+    return buf.toString();
   }
 }

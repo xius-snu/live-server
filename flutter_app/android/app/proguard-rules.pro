@@ -6,3 +6,6 @@
 -keep class io.flutter.view.**  { *; }
 -keep class io.flutter.**  { *; }
 -keep class io.flutter.plugins.**  { *; }
+
+## Play Core (deferred components, not used)
+-dontwarn com.google.android.play.core.**

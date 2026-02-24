@@ -1,7 +1,7 @@
 import 'dart:math';
 
 enum UpgradeType {
-  widerRoller,
+  widerRoller, // kept for save migration, not shown in UI
   turboSpeed,
   steadyHand,
   autoPainter,
@@ -43,8 +43,6 @@ class UpgradeDefinition {
   String cumulativeEffect(int level) {
     switch (type) {
       case UpgradeType.widerRoller:
-        // Diminishing: each level adds less. Total = 0.15 + sum of diminishing increments.
-        // Effective extra width % = level * 2, but actual effect is divided by wallScale.
         return '+${level * 2}% width';
       case UpgradeType.turboSpeed:
         return '+${level * 10}% cash';
@@ -60,23 +58,15 @@ class UpgradeDefinition {
     }
   }
 
+  /// All upgrades shown in the UI (excludes widerRoller which is now
+  /// the separate roller level system).
   static const List<UpgradeDefinition> all = [
-    UpgradeDefinition(
-      type: UpgradeType.widerRoller,
-      name: 'Wider Roller',
-      icon: '\u{1F58C}\u{FE0F}',
-      description: 'Paint wider stripes',
-      maxLevel: -1, // uncapped
-      baseCost: 50,
-      costMultiplier: 1.8,
-      effectPerLevel: '+2% width',
-    ),
     UpgradeDefinition(
       type: UpgradeType.turboSpeed,
       name: 'Turbo Speed',
       icon: '\u26A1',
       description: 'Earn more cash per tap',
-      maxLevel: -1, // uncapped
+      maxLevel: -1,
       baseCost: 30,
       costMultiplier: 1.5,
       effectPerLevel: '+10% cash/tap',
@@ -86,7 +76,7 @@ class UpgradeDefinition {
       name: 'Steady Hand',
       icon: '\u{1F3AF}',
       description: 'Slower roller for precision',
-      maxLevel: -1, // uncapped
+      maxLevel: -1,
       baseCost: 100,
       costMultiplier: 2.0,
       effectPerLevel: '-7% speed',
@@ -96,7 +86,7 @@ class UpgradeDefinition {
       name: 'Auto-Painter',
       icon: '\u{1F916}',
       description: 'Earn cash while away',
-      maxLevel: -1, // uncapped
+      maxLevel: -1,
       baseCost: 150,
       costMultiplier: 2.0,
       effectPerLevel: '+\$2/sec idle',
@@ -123,7 +113,20 @@ class UpgradeDefinition {
     ),
   ];
 
+  /// Keep full list for migration/lookup (includes widerRoller).
+  static const UpgradeDefinition _widerRollerDef = UpgradeDefinition(
+    type: UpgradeType.widerRoller,
+    name: 'Wider Roller',
+    icon: '\u{1F58C}\u{FE0F}',
+    description: 'Paint wider stripes',
+    maxLevel: -1,
+    baseCost: 50,
+    costMultiplier: 1.8,
+    effectPerLevel: '+2% width',
+  );
+
   static UpgradeDefinition getDefinition(UpgradeType type) {
+    if (type == UpgradeType.widerRoller) return _widerRollerDef;
     return all.firstWhere((u) => u.type == type);
   }
 }
