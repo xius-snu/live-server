@@ -12,7 +12,7 @@ class WallBorderComponent extends PositionComponent {
   WallBorderComponent({
     required super.position,
     required super.size,
-    this.borderColor = const Color(0xFFD3D3D3),
+    this.borderColor = const Color(0xFF000000),
   });
 
   @override

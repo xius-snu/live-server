@@ -20,6 +20,9 @@ class WallComponent extends PositionComponent {
   // House tier hint (higher = cleaner wall)
   int houseTier;
 
+  // Cycle level (Dirt House I = 1, Dirt House II = 2, etc.)
+  int cycleLevel;
+
   // Seed that changes each wall/round for pattern variation
   int _wallSeed = 0;
 
@@ -28,6 +31,7 @@ class WallComponent extends PositionComponent {
     required this.dirtColor,
     required this.paintColor,
     this.houseTier = 0,
+    this.cycleLevel = 1,
     super.position,
     super.size,
   });
@@ -61,12 +65,10 @@ class WallComponent extends PositionComponent {
 
   void _generatePatternShapes() {
     final patternDef = WallPatternDef.forHouseIndex(houseTier);
-    final targetCount =
-        patternDef.minCount + _rng.nextInt(patternDef.maxCount - patternDef.minCount + 1);
+    // Number of decorations = cycle level (Dirt House I = 1, II = 2, etc.)
+    final targetCount = max(1, cycleLevel);
     final margin = patternDef.margin;
 
-    // --- Grid-jitter placement for even spread ---
-    // Determine grid dimensions that best fit targetCount cells.
     final usableW = size.x - margin * 2;
     final usableH = size.y - margin * 2;
     if (usableW <= 0 || usableH <= 0) {
@@ -74,11 +76,49 @@ class WallComponent extends PositionComponent {
       return;
     }
 
-    // Pick columns/rows so cells are roughly square-ish.
+    // Use the median size from the pattern def as the base size
+    final baseSizeOpt = patternDef.sizes[patternDef.sizes.length ~/ 2];
+
+    // Try placing at scale 1.0 first; if not all fit, shrink and retry
+    double scale = 1.0;
+    List<_PatternPlacement> placed = [];
+
+    for (int attempt = 0; attempt < 6; attempt++) {
+      placed = _tryPlaceShapes(
+        targetCount: targetCount,
+        patternDef: patternDef,
+        baseSizeOpt: baseSizeOpt,
+        scale: scale,
+        margin: margin,
+        usableW: usableW,
+        usableH: usableH,
+      );
+      if (placed.length >= targetCount) break;
+      // Shrink by 15% each attempt
+      scale *= 0.85;
+    }
+
+    _patternShapes = placed;
+  }
+
+  /// Attempt to place [targetCount] shapes at the given [scale].
+  /// Returns the placed shapes (may be fewer than target if they don't fit).
+  List<_PatternPlacement> _tryPlaceShapes({
+    required int targetCount,
+    required WallPatternDef patternDef,
+    required PatternSize baseSizeOpt,
+    required double scale,
+    required double margin,
+    required double usableW,
+    required double usableH,
+  }) {
+    // Re-seed RNG consistently so shrink retries produce similar layouts
+    final placementRng = Random(wallColor.value ^ dirtColor.value ^ _wallSeed ^ 0xABCD);
+
+    // --- Grid-jitter placement for even spread ---
     final aspect = usableW / usableH;
     int cols = sqrt(targetCount * aspect).round().clamp(1, targetCount);
     int rows = (targetCount / cols).ceil().clamp(1, targetCount);
-    // Adjust so cols * rows >= targetCount
     while (cols * rows < targetCount) {
       cols++;
     }
@@ -86,14 +126,13 @@ class WallComponent extends PositionComponent {
     final cellW = usableW / cols;
     final cellH = usableH / rows;
 
-    // Build a list of all cell indices, shuffle, then take targetCount.
+    // Build shuffled cell list
     final allCells = <int>[];
     for (int i = 0; i < cols * rows; i++) {
       allCells.add(i);
     }
-    // Fisher-Yates shuffle with our seeded RNG
     for (int i = allCells.length - 1; i > 0; i--) {
-      final j = _rng.nextInt(i + 1);
+      final j = placementRng.nextInt(i + 1);
       final tmp = allCells[i];
       allCells[i] = allCells[j];
       allCells[j] = tmp;
@@ -106,29 +145,26 @@ class WallComponent extends PositionComponent {
       final col = cellIdx % cols;
       final row = cellIdx ~/ cols;
 
-      // Pick a random discrete size
-      final sizeOpt = patternDef.sizes[_rng.nextInt(patternDef.sizes.length)];
-      final w = sizeOpt.width;
-      final h = sizeOpt.height;
+      // Pick a random size from the available sizes, then apply scale
+      final sizeOpt = patternDef.sizes[placementRng.nextInt(patternDef.sizes.length)];
+      final w = sizeOpt.width * scale;
+      final h = sizeOpt.height * scale;
+      final cr = sizeOpt.cornerRadius * scale;
 
       final isDiamond = patternDef.shape == PatternShape.diamond;
       final bboxW = isDiamond ? w * 0.707 + h * 0.707 : w;
       final bboxH = isDiamond ? w * 0.707 + h * 0.707 : h;
 
-      // Cell center
+      // Cell center + jitter
       final cellCx = margin + (col + 0.5) * cellW;
       final cellCy = margin + (row + 0.5) * cellH;
+      final jitterX = ((placementRng.nextDouble() - 0.5) * cellW * 0.8);
+      final jitterY = ((placementRng.nextDouble() - 0.5) * cellH * 0.8);
 
-      // Jitter: random offset within the cell, but keep shape inside wall bounds.
-      // Allow up to 40% of cell size as jitter so it looks random, not gridded.
-      final jitterX = ((_rng.nextDouble() - 0.5) * cellW * 0.8);
-      final jitterY = ((_rng.nextDouble() - 0.5) * cellH * 0.8);
-
-      // Clamp center so the shape bbox stays within the wall margin.
       final cx = (cellCx + jitterX).clamp(margin + bboxW / 2, size.x - margin - bboxW / 2);
       final cy = (cellCy + jitterY).clamp(margin + bboxH / 2, size.y - margin - bboxH / 2);
 
-      // Reject if it overlaps any already-placed shape (no overlap allowed).
+      // Reject overlaps
       const gap = 4.0;
       var overlaps = false;
       for (final existing in placed) {
@@ -147,11 +183,11 @@ class WallComponent extends PositionComponent {
         height: h,
         bboxW: bboxW,
         bboxH: bboxH,
-        cornerRadius: sizeOpt.cornerRadius,
+        cornerRadius: cr,
       ));
     }
 
-    _patternShapes = placed;
+    return placed;
   }
 
   void _renderPatternShapes(Canvas canvas) {
@@ -324,8 +360,9 @@ class WallComponent extends PositionComponent {
     _regenerateAll();
   }
 
-  void updateHouseTier(int tier) {
+  void updateHouseTier(int tier, {int? level}) {
     houseTier = tier;
+    if (level != null) cycleLevel = level;
     _regenerateAll();
   }
 

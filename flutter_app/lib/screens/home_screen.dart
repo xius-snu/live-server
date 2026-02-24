@@ -139,6 +139,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     // House tier 0-6 based on type index
     final houseTier = house.typeIndex;
+    final cycleLevel = HouseDefinition.cycleLevelFor(gameService.houseLevel);
 
     _game.configure(
       rollerWidthFraction: gameService.rollerWidthPercent,
@@ -146,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen>
       maxStrokes: gameService.maxStrokes,
       room: room,
       houseTier: houseTier,
+      cycleLevel: cycleLevel,
       borderColor: house.borderColor,
       rollerPaintColor: gameService.equippedPaintColor,
     );

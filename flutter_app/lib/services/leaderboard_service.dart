@@ -74,7 +74,7 @@ class LeaderboardService extends ChangeNotifier {
   List<LeaderboardEntry> _wallsBoard = [];
   PlayerLeaderboardStats? _playerStats;
 
-  int _nextRefreshIn = 3600; // seconds until server cache refreshes
+  int _nextRefreshIn = 600; // seconds until server cache refreshes
   int _lastUpdatedAgo = 0;   // seconds since last server cache refresh
   Timer? _countdownTimer;
 
@@ -165,7 +165,7 @@ class LeaderboardService extends ChangeNotifier {
         _weekId = data['weekId'] as String? ?? '';
         _startsAt = DateTime.tryParse(data['startsAt'] ?? '');
         _endsAt = DateTime.tryParse(data['endsAt'] ?? '');
-        _nextRefreshIn = data['nextRefreshIn'] as int? ?? 3600;
+        _nextRefreshIn = data['nextRefreshIn'] as int? ?? 600;
         _lastUpdatedAgo = data['lastUpdatedAgo'] as int? ?? 0;
 
         _avgCoverageBoard = _parseEntries(data['avgCoverage']);

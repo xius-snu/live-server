@@ -149,6 +149,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     required int maxStrokes,
     required RoomDefinition room,
     int houseTier = 0,
+    int cycleLevel = 1,
     Color borderColor = const Color(0xFFD3D3D3),
     Color? rollerPaintColor,
     BlendMode? rollerPaintBlendMode,
@@ -163,9 +164,9 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
     if (isMounted) {
       wall.updateColors(room.wallColor, room.dirtColor, _rollerPaintColor);
-      wall.updateHouseTier(houseTier);
+      wall.updateHouseTier(houseTier, level: cycleLevel);
       wall.updateSeed(_wallSeedCounter);
-      wallBorder.borderColor = borderColor;
+      wallBorder.borderColor = const Color(0xFF000000);
       roller.speedMultiplier = rollerSpeedMultiplier;
       roller.setPaintColor(_rollerPaintColor);
       roller.setDrawSize(_rollerSize);

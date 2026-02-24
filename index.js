@@ -96,7 +96,7 @@ function getWeekBounds(weekId) {
 // ============================================
 
 const leaderboardCache = {}; // { weekId: { data, fetchedAt } }
-const LEADERBOARD_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
+const LEADERBOARD_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 let leaderboardRefreshLock = false;
 
 async function refreshLeaderboardCache(weekId) {
