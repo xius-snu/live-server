@@ -100,9 +100,27 @@ const LEADERBOARD_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 let leaderboardRefreshLock = false;
 
 async function refreshLeaderboardCache(weekId) {
-    const categories = ['weekly_coverage', 'weekly_coins_earned', 'weekly_walls_painted'];
     const result = {};
-    for (const col of categories) {
+
+    // Avg coverage = total coverage / walls painted (only players with >= 1 wall)
+    const avgRes = await pool.query(
+        `SELECT user_id, username,
+                weekly_coverage / NULLIF(weekly_walls_painted, 0) as value
+         FROM leaderboard_participants
+         WHERE week_id = $1 AND weekly_walls_painted > 0
+         ORDER BY value DESC
+         LIMIT 100`,
+        [weekId]
+    );
+    result.avg_coverage = avgRes.rows.map((r, i) => ({
+        rank: i + 1,
+        userId: r.user_id,
+        username: r.username,
+        value: parseFloat(r.value) || 0,
+    }));
+
+    // Coins and walls: straightforward descending
+    for (const col of ['weekly_coins_earned', 'weekly_walls_painted']) {
         const res = await pool.query(
             `SELECT user_id, username, ${col} as value
              FROM leaderboard_participants
@@ -133,7 +151,7 @@ async function getOrRefreshCache(weekId) {
     if (leaderboardRefreshLock) {
         // Return stale data if available, or empty
         if (cached) return cached;
-        return { data: { weekly_coverage: [], weekly_coins_earned: [], weekly_walls_painted: [] }, fetchedAt: now };
+        return { data: { avg_coverage: [], weekly_coins_earned: [], weekly_walls_painted: [] }, fetchedAt: now };
     }
     leaderboardRefreshLock = true;
     try {
@@ -891,6 +909,8 @@ fastify.register(async function (fastify) {
                 );
                 if (pRes.rows.length > 0) {
                     const p = pRes.rows[0];
+                    const walls = parseInt(p.weekly_walls_painted) || 0;
+                    const avgCov = walls > 0 ? (parseFloat(p.weekly_coverage) || 0) / walls : 0;
                     // Compute ranks from cached data
                     const findRank = (col, val) => {
                         const list = cached.data[col] || [];
@@ -901,12 +921,12 @@ fastify.register(async function (fastify) {
                         return above + 1; // approximate
                     };
                     playerStats = {
-                        weeklyCoverage: parseFloat(p.weekly_coverage) || 0,
+                        avgCoverage: avgCov,
                         weeklyCoinsEarned: parseFloat(p.weekly_coins_earned) || 0,
-                        weeklyWallsPainted: parseInt(p.weekly_walls_painted) || 0,
-                        coverageRank: findRank('weekly_coverage', parseFloat(p.weekly_coverage) || 0),
+                        weeklyWallsPainted: walls,
+                        avgCoverageRank: findRank('avg_coverage', avgCov),
                         coinsRank: findRank('weekly_coins_earned', parseFloat(p.weekly_coins_earned) || 0),
-                        wallsRank: findRank('weekly_walls_painted', parseInt(p.weekly_walls_painted) || 0),
+                        wallsRank: findRank('weekly_walls_painted', walls),
                     };
                 }
             }
@@ -917,7 +937,7 @@ fastify.register(async function (fastify) {
                 endsAt: endsAt.toISOString(),
                 nextRefreshIn,
                 lastUpdatedAgo,
-                coverage: cached.data.weekly_coverage || [],
+                avgCoverage: cached.data.avg_coverage || [],
                 coins: cached.data.weekly_coins_earned || [],
                 walls: cached.data.weekly_walls_painted || [],
                 playerStats,
@@ -926,7 +946,7 @@ fastify.register(async function (fastify) {
             fastify.log.error('Leaderboard current error: ' + e.message);
             return {
                 weekId: getCurrentWeekId(),
-                coverage: [], coins: [], walls: [],
+                avgCoverage: [], coins: [], walls: [],
                 nextRefreshIn: 3600, lastUpdatedAgo: 0, playerStats: null,
             };
         }

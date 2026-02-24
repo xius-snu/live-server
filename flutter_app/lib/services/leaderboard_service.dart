@@ -28,28 +28,28 @@ class LeaderboardEntry {
 
 /// Player's own stats + rank in each category.
 class PlayerLeaderboardStats {
-  final double weeklyCoverage;
+  final double avgCoverage;
   final double weeklyCoinsEarned;
   final int weeklyWallsPainted;
-  final int coverageRank;
+  final int avgCoverageRank;
   final int coinsRank;
   final int wallsRank;
 
   const PlayerLeaderboardStats({
-    required this.weeklyCoverage,
+    required this.avgCoverage,
     required this.weeklyCoinsEarned,
     required this.weeklyWallsPainted,
-    required this.coverageRank,
+    required this.avgCoverageRank,
     required this.coinsRank,
     required this.wallsRank,
   });
 
   factory PlayerLeaderboardStats.fromJson(Map<String, dynamic> j) =>
       PlayerLeaderboardStats(
-        weeklyCoverage: (j['weeklyCoverage'] as num?)?.toDouble() ?? 0,
+        avgCoverage: (j['avgCoverage'] as num?)?.toDouble() ?? 0,
         weeklyCoinsEarned: (j['weeklyCoinsEarned'] as num?)?.toDouble() ?? 0,
         weeklyWallsPainted: (j['weeklyWallsPainted'] as num?)?.toInt() ?? 0,
-        coverageRank: j['coverageRank'] as int? ?? 0,
+        avgCoverageRank: j['avgCoverageRank'] as int? ?? 0,
         coinsRank: j['coinsRank'] as int? ?? 0,
         wallsRank: j['wallsRank'] as int? ?? 0,
       );
@@ -69,7 +69,7 @@ class LeaderboardService extends ChangeNotifier {
   DateTime? _startsAt;
   DateTime? _endsAt;
 
-  List<LeaderboardEntry> _coverageBoard = [];
+  List<LeaderboardEntry> _avgCoverageBoard = [];
   List<LeaderboardEntry> _coinsBoard = [];
   List<LeaderboardEntry> _wallsBoard = [];
   PlayerLeaderboardStats? _playerStats;
@@ -86,7 +86,7 @@ class LeaderboardService extends ChangeNotifier {
   String get weekId => _weekId;
   DateTime? get startsAt => _startsAt;
   DateTime? get endsAt => _endsAt;
-  List<LeaderboardEntry> get coverageBoard => _coverageBoard;
+  List<LeaderboardEntry> get avgCoverageBoard => _avgCoverageBoard;
   List<LeaderboardEntry> get coinsBoard => _coinsBoard;
   List<LeaderboardEntry> get wallsBoard => _wallsBoard;
   PlayerLeaderboardStats? get playerStats => _playerStats;
@@ -168,7 +168,7 @@ class LeaderboardService extends ChangeNotifier {
         _nextRefreshIn = data['nextRefreshIn'] as int? ?? 3600;
         _lastUpdatedAgo = data['lastUpdatedAgo'] as int? ?? 0;
 
-        _coverageBoard = _parseEntries(data['coverage']);
+        _avgCoverageBoard = _parseEntries(data['avgCoverage']);
         _coinsBoard = _parseEntries(data['coins']);
         _wallsBoard = _parseEntries(data['walls']);
 

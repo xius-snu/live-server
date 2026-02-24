@@ -570,15 +570,15 @@ class _LeaderboardCard extends StatefulWidget {
 }
 
 class _LeaderboardCardState extends State<_LeaderboardCard> {
-  int _selectedTab = 0; // 0=coverage, 1=coins, 2=walls
-  static const _tabLabels = ['Coverage', 'Coins', 'Walls'];
+  int _selectedTab = 0; // 0=avg coverage, 1=coins, 2=walls
+  static const _tabLabels = ['Avg Coverage', 'Coins', 'Walls'];
 
   @override
   Widget build(BuildContext context) {
     return Consumer<LeaderboardService>(
       builder: (context, lb, _) {
         final board = _selectedTab == 0
-            ? lb.coverageBoard
+            ? lb.avgCoverageBoard
             : _selectedTab == 1
                 ? lb.coinsBoard
                 : lb.wallsBoard;
@@ -801,12 +801,12 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                   if (lb.joined && lb.playerStats != null) ...[
                     Builder(builder: (_) {
                       final rank = _selectedTab == 0
-                          ? lb.playerStats!.coverageRank
+                          ? lb.playerStats!.avgCoverageRank
                           : _selectedTab == 1
                               ? lb.playerStats!.coinsRank
                               : lb.playerStats!.wallsRank;
                       final val = _selectedTab == 0
-                          ? lb.playerStats!.weeklyCoverage
+                          ? lb.playerStats!.avgCoverage
                           : _selectedTab == 1
                               ? lb.playerStats!.weeklyCoinsEarned
                               : lb.playerStats!.weeklyWallsPainted
