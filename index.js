@@ -844,11 +844,11 @@ fastify.register(async function (fastify) {
                 );
             }
 
-            // Upsert participant
+            // Upsert participant (update username if it changed since last join)
             await pool.query(
                 `INSERT INTO leaderboard_participants (week_id, user_id, username)
                  VALUES ($1, $2, $3)
-                 ON CONFLICT (week_id, user_id) DO NOTHING`,
+                 ON CONFLICT (week_id, user_id) DO UPDATE SET username = $3`,
                 [weekId, userId, username]
             );
 
@@ -867,15 +867,22 @@ fastify.register(async function (fastify) {
         try {
             const weekId = getCurrentWeekId();
 
-            // Only update if the player has joined this week
+            // Get latest username
+            const userRes = await pool.query('SELECT username FROM users WHERE user_id = $1', [userId]);
+            const username = userRes.rows.length > 0 ? userRes.rows[0].username : null;
+
+            // Update stats + sync username if it changed
             const res = await pool.query(
                 `UPDATE leaderboard_participants
                  SET weekly_coverage = weekly_coverage + $1,
                      weekly_coins_earned = weekly_coins_earned + $2,
                      weekly_walls_painted = weekly_walls_painted + 1,
                      last_submitted_at = CURRENT_TIMESTAMP
+                     ${username ? ', username = $5' : ''}
                  WHERE week_id = $3 AND user_id = $4`,
-                [coverage || 0, coinsEarned || 0, weekId, userId]
+                username
+                    ? [coverage || 0, coinsEarned || 0, weekId, userId, username]
+                    : [coverage || 0, coinsEarned || 0, weekId, userId]
             );
 
             return { success: true, updated: res.rowCount > 0 };
