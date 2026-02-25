@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 /// 7 house types that cycle infinitely with increasing levels.
@@ -297,5 +298,39 @@ class HouseDefinition {
   static String rollerWidthDisplay(int rollerLevel, int houseLevel) {
     final m = rollerWidthM(rollerLevel, houseLevel);
     return '${m.toStringAsFixed(2)}m';
+  }
+
+  /// Weights for up to 7 most-recent tiers.
+  /// Index 0 = most recently unlocked (highest prob), index 6 = 7th back.
+  /// Sum = 100 when all 7 are used.
+  static const List<int> _tierWeights = [18, 17, 16, 14, 13, 12, 10];
+
+  /// Pick a random house level from the most-recent tier pool.
+  /// Returns a houseLevel in [max(1, maxHouseLevel-6) .. maxHouseLevel].
+  static int randomWeightedHouseLevel(int maxHouseLevel, Random rng) {
+    if (maxHouseLevel <= 1) return 1;
+
+    // Build pool: up to 7 most recent levels
+    final poolSize = maxHouseLevel.clamp(1, _tierWeights.length);
+    final startLevel = maxHouseLevel - poolSize + 1; // inclusive
+
+    // Sum weights for this pool size
+    int totalWeight = 0;
+    for (int i = 0; i < poolSize; i++) {
+      totalWeight += _tierWeights[i];
+    }
+
+    // Roll
+    int roll = rng.nextInt(totalWeight);
+    for (int i = 0; i < poolSize; i++) {
+      roll -= _tierWeights[i];
+      if (roll < 0) {
+        // i=0 → most recent (maxHouseLevel), i=1 → second most recent, etc.
+        return maxHouseLevel - i;
+      }
+    }
+
+    // Fallback (shouldn't reach here)
+    return startLevel;
   }
 }

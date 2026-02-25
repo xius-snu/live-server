@@ -6,13 +6,17 @@ import 'components/wall_component.dart';
 import 'components/roller_component.dart';
 import 'components/paint_stripe_component.dart';
 import 'components/paint_splat_particle.dart';
+import 'components/floating_coverage_text.dart';
+import 'components/perfect_shimmer_component.dart';
 import 'components/background_component.dart';
 import 'components/wall_border_component.dart';
+import 'components/wall_pattern_overlay.dart';
 import '../models/house.dart';
 class PaintRollerGame extends FlameGame with TapCallbacks {
   late BackgroundComponent background;
   late WallComponent wall;
   late WallBorderComponent wallBorder;
+  late WallPatternOverlay patternOverlay;
   late RollerComponent roller;
   late GameRoundState roundState;
 
@@ -38,7 +42,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
   // Paint color comes from the equipped roller skin.
   Color _rollerPaintColor = const Color(0xFFFF3B30); // default roller: bright red
-  BlendMode _rollerPaintBlendMode = BlendMode.color;
+  BlendMode _rollerPaintBlendMode = BlendMode.srcOver;
 
   // Seed counter so wall patterns vary each round.
   int _wallSeedCounter = 0;
@@ -49,12 +53,12 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
   double get _wallWidth {
     final bgWallRect = background.getWallRect();
     final maxWallW = _referenceWidth;
-    return bgWallRect.width.clamp(80.0, maxWallW);
+    return (bgWallRect.width * 0.90).clamp(80.0, maxWallW);
   }
 
   double get _wallHeight {
     final bgWallRect = background.getWallRect();
-    return (bgWallRect.height * 0.90).clamp(80.0, 2000.0);
+    return (bgWallRect.height * 0.88).clamp(80.0, 2000.0);
   }
 
   double get _wallLeft {
@@ -64,7 +68,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
   double get _wallTop {
     final bgWallRect = background.getWallRect();
-    return bgWallRect.top + bgWallRect.height * 0.02;
+    return bgWallRect.top + bgWallRect.height * 0.03;
   }
 
   // Roller is a square sprite (600x600 PNG) — size proportional to wall.
@@ -101,6 +105,13 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     );
     add(wall);
 
+    // Pattern outline overlay: draws shape strokes above paint stripes
+    patternOverlay = WallPatternOverlay(wall: wall);
+    patternOverlay.position = Vector2(_wallLeft, _wallTop);
+    patternOverlay.size = Vector2(_wallWidth, _wallHeight);
+    patternOverlay.priority = 15; // above paint stripes (0), below roller (20)
+    add(patternOverlay);
+
     roller = RollerComponent(
       speedMultiplier: _rollerSpeedMultiplier,
       wallWidth: _wallWidth,
@@ -130,6 +141,8 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
       background.size = size;
       wall.position = Vector2(_wallLeft, _wallTop);
       wall.size = Vector2(_wallWidth, _wallHeight);
+      patternOverlay.position = Vector2(_wallLeft, _wallTop);
+      patternOverlay.size = Vector2(_wallWidth, _wallHeight);
       wallBorder.position = Vector2(_wallLeft, _wallTop);
       wallBorder.size = Vector2(_wallWidth, _wallHeight);
 
@@ -218,6 +231,13 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
   void startNewRound() => _startNewRound();
 
+  /// Fast-forward the wet edge glow on all stripes so the paint looks dry.
+  void quickDryStripes() {
+    for (final stripe in children.whereType<PaintStripeComponent>()) {
+      stripe.quickDry();
+    }
+  }
+
   @override
   void update(double dt) {
     super.update(dt); // updates all children (roller recalcs position, etc.)
@@ -227,10 +247,9 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     if (wallSlide != 0.0) {
       final offset = wallSlide * size.x;
       wall.position.x = _wallLeft + offset;
+      patternOverlay.position.x = _wallLeft + offset;
       wallBorder.position.x = _wallLeft + offset;
       for (final stripe in children.whereType<PaintStripeComponent>()) {
-        // Stripes are created at _wallLeft-relative positions.
-        // Shift them by the same offset from their original x.
         stripe.position.x = stripe.baseX + offset;
       }
     }
@@ -265,24 +284,54 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     );
     add(stripe);
 
-    final splatOrigin = Vector2(roller.pixelX, _wallTop + _wallHeight * 0.85);
-    _spawnSplats(splatOrigin);
+    final combo = roundState.strokesUsed; // 1-based after addStripe
+
+    final splatOrigin = Vector2(roller.pixelX, _wallTop + _wallHeight * 0.82);
+    _spawnSplats(splatOrigin, rollerContactWidth, combo);
+
+    // Floating coverage text with combo
+    _spawnCoverageText(roller.pixelX, combo);
 
     onStripePainted?.call();
 
     if (!roundState.isActive) {
+      // Coverage shimmer for NICE (90%+), GREAT (95%+), and PERFECT (100%)
+      if (roundState.getCoverageDisplayPercent() >= 90) {
+        final shimmer = PerfectShimmerComponent(
+          position: Vector2(_wallLeft, _wallTop),
+          size: Vector2(_wallWidth, _wallHeight),
+        );
+        shimmer.priority = 28; // above stripes, below border
+        add(shimmer);
+      }
       roundState.showingResults = true;
       onRoundComplete?.call(roundState.coveragePercent, roundState.getCoverageDisplayPercent());
     }
   }
 
-  void _spawnSplats(Vector2 origin) {
+  void _spawnCoverageText(double centerX, int combo) {
+    final coveragePct = roundState.getCoverageDisplayPercent();
+    final text = FloatingCoverageText(
+      text: '$coveragePct%',
+      color: Colors.white,
+      comboCount: combo,
+      position: Vector2(centerX - 70, _wallTop + _wallHeight * 0.25),
+    );
+    text.priority = 35; // above everything
+    add(text);
+  }
+
+  void _spawnSplats(Vector2 origin, double contactWidth, int combo) {
+    // Scale particle count with combo: 14 base, up to 24 at high combo
+    final count = combo >= 5 ? 24 : combo >= 3 ? 18 : 14;
     final particles = PaintSplatParticle.burst(
       color: _rollerPaintColor,
       origin: origin,
-      count: 5,
+      count: count,
+      spreadWidth: contactWidth * 0.8,
     );
     for (final p in particles) {
+      p.priority = 25; // above stripes, below border
       add(p);
     }
   }

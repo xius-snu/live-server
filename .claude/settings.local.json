@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:live-server-4c3n.onrender.com)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(cmd.exe /c:*)",
+      "Bash(taskkill:*)",
+      "Bash(flutter pub run:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(flutter devices:*)",
+      "Bash(flutter run:*)",
+      "Bash(git add .claude/settings.local.json flutter_app/android/app/src/main/AndroidManifest.xml flutter_app/ios/Runner/Info.plist flutter_app/lib/game/components/background_component.dart flutter_app/lib/game/components/paint_splat_particle.dart flutter_app/lib/game/components/paint_stripe_component.dart flutter_app/lib/game/components/roller_component.dart flutter_app/lib/game/components/wall_component.dart flutter_app/lib/game/paint_roller_game.dart flutter_app/lib/main.dart flutter_app/lib/models/house.dart flutter_app/lib/models/player_progress.dart flutter_app/lib/screens/event_screen.dart flutter_app/lib/screens/home_screen.dart flutter_app/lib/screens/profile_screen.dart flutter_app/lib/screens/upgrades_screen.dart flutter_app/lib/services/audio_service.dart flutter_app/lib/services/game_service.dart flutter_app/lib/shells/survival_shell.dart flutter_app/web/index.html flutter_app/web/manifest.json flutter_app/windows/runner/Runner.rc flutter_app/lib/game/components/floating_coverage_text.dart flutter_app/lib/game/components/perfect_shimmer_component.dart flutter_app/lib/game/components/wall_pattern_overlay.dart flutter_app/lib/screens/minigame_bullseye.dart flutter_app/lib/screens/minigame_color_match.dart flutter_app/lib/screens/minigame_speed_paint.dart flutter_app/lib/screens/social_screen.dart flutter_app/lib/services/guild_service.dart)"
     ]
   }
 }

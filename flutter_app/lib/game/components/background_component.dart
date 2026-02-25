@@ -16,8 +16,8 @@ class BackgroundComponent extends PositionComponent {
   Sprite? _bgSprite;
 
   // Wall region in the image (as fraction of image height)
-  static const double wallTopFraction = 0.296;
-  static const double wallBottomFraction = 0.710;
+  static const double wallTopFraction = 0.32;
+  static const double wallBottomFraction = 0.72;
   // Wall area left/right margins in the image (fraction of image width)
   static const double wallLeftFraction = 0.0;
   static const double wallRightFraction = 1.0;

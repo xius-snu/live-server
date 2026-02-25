@@ -78,6 +78,10 @@ class _EventScreenState extends State<EventScreen> {
                       ),
                       const SizedBox(height: 20),
 
+                      // Weekly Leaderboard
+                      _LeaderboardCard(),
+                      const SizedBox(height: 20),
+
                       if (active.isNotEmpty)
                         ...active.map((event) => Padding(
                               padding: const EdgeInsets.only(bottom: 20),
@@ -90,10 +94,6 @@ class _EventScreenState extends State<EventScreen> {
 
                       // Daily lottery section (client-side, always available)
                       _DailyLotteryCard(),
-                      const SizedBox(height: 20),
-
-                      // Weekly Leaderboard
-                      _LeaderboardCard(),
                       const SizedBox(height: 16),
 
                       // Market impact note

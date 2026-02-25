@@ -2,8 +2,7 @@ import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
-/// A single paint splat particle that bursts from the roller on tap.
-/// Launches with random velocity, follows gravity, fades and dies.
+/// A single paint splat particle. Pre-allocates Paint objects to avoid GC churn.
 class PaintSplatParticle extends PositionComponent {
   final Color color;
   double _vx;
@@ -11,7 +10,13 @@ class PaintSplatParticle extends PositionComponent {
   double _life;
   final double _maxLife;
   final double _radius;
-  static const double _gravity = 400.0; // px/s^2
+  final bool _isBlob;
+  static const double _gravity = 500.0;
+
+  // Pre-allocated paints
+  final Paint _mainPaint = Paint();
+  final Paint _highlightPaint = Paint();
+  final bool _hasHighlight;
 
   PaintSplatParticle({
     required this.color,
@@ -20,11 +25,14 @@ class PaintSplatParticle extends PositionComponent {
     required double life,
     required double radius,
     required super.position,
+    bool isBlob = false,
   })  : _vx = vx,
         _vy = vy,
         _life = life,
         _maxLife = life,
         _radius = radius,
+        _isBlob = isBlob,
+        _hasHighlight = radius > 3,
         super(size: Vector2(radius * 2, radius * 2));
 
   @override
@@ -35,61 +43,70 @@ class PaintSplatParticle extends PositionComponent {
       removeFromParent();
       return;
     }
-
-    // Physics
     _vy += _gravity * dt;
     position.x += _vx * dt;
     position.y += _vy * dt;
-
-    // Slow down horizontal
-    _vx *= 0.98;
+    _vx *= 0.97;
   }
 
   @override
   void render(Canvas canvas) {
-    final progress = 1.0 - (_life / _maxLife); // 0 -> 1
-    final opacity = (1.0 - progress * progress).clamp(0.0, 1.0); // fade out
-    final scale = 1.0 - progress * 0.4; // shrink slightly
+    final progress = 1.0 - (_life / _maxLife);
+    final opacity = (1.0 - progress * progress).clamp(0.0, 1.0);
+    final scale = _isBlob ? 1.0 + progress * 0.3 : 1.0 - progress * 0.5;
 
-    final paint = Paint()..color = color.withOpacity(opacity * 0.8);
-    canvas.drawCircle(
-      Offset.zero,
-      _radius * scale,
-      paint,
-    );
+    _mainPaint.color = Color.fromRGBO(color.red, color.green, color.blue, opacity * 0.85);
+    canvas.drawCircle(Offset.zero, _radius * scale, _mainPaint);
 
-    // Tiny highlight
-    if (opacity > 0.3) {
+    if (_hasHighlight && opacity > 0.3) {
+      _highlightPaint.color = Color.fromRGBO(255, 255, 255, opacity * 0.3);
       canvas.drawCircle(
-        Offset(-_radius * 0.2, -_radius * 0.2),
-        _radius * scale * 0.3,
-        Paint()..color = Colors.white.withOpacity(opacity * 0.2),
+        Offset(-_radius * 0.25, -_radius * 0.25),
+        _radius * scale * 0.35,
+        _highlightPaint,
       );
     }
   }
 
-  /// Spawn a burst of particles at the given position.
   static List<PaintSplatParticle> burst({
     required Color color,
     required Vector2 origin,
-    int count = 6,
+    int count = 14,
+    double spreadWidth = 0,
     Random? rng,
   }) {
     final r = rng ?? Random();
-    return List.generate(count, (_) {
-      final angle = -pi * 0.1 + r.nextDouble() * (-pi * 0.8); // mostly upward
-      final speed = 80 + r.nextDouble() * 180;
-      final life = 0.3 + r.nextDouble() * 0.4;
-      final radius = 2.0 + r.nextDouble() * 3.5;
+    final particles = <PaintSplatParticle>[];
 
-      return PaintSplatParticle(
+    for (int i = 0; i < count; i++) {
+      final offsetX = spreadWidth > 0
+          ? (r.nextDouble() - 0.5) * spreadWidth
+          : 0.0;
+
+      final isBlob = i < 3;
+
+      final angle = -pi * 0.15 + r.nextDouble() * (-pi * 0.7);
+      final speed = isBlob
+          ? 60 + r.nextDouble() * 100
+          : 100 + r.nextDouble() * 250;
+      final life = isBlob
+          ? 0.4 + r.nextDouble() * 0.3
+          : 0.2 + r.nextDouble() * 0.35;
+      final radius = isBlob
+          ? 4.0 + r.nextDouble() * 4.0
+          : 1.5 + r.nextDouble() * 3.0;
+
+      particles.add(PaintSplatParticle(
         color: color,
         vx: cos(angle) * speed,
         vy: sin(angle) * speed,
         life: life,
         radius: radius,
-        position: origin.clone(),
-      );
-    });
+        isBlob: isBlob,
+        position: Vector2(origin.x + offsetX, origin.y),
+      ));
+    }
+
+    return particles;
   }
 }

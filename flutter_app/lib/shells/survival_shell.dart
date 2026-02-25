@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../screens/home_screen.dart';
 import '../screens/upgrades_screen.dart';
 import '../screens/marketplace_screen.dart';
-import '../screens/event_screen.dart';
+import '../screens/social_screen.dart';
 import '../screens/profile_screen.dart';
 import '../services/user_service.dart';
 import '../services/game_service.dart';
@@ -17,7 +17,7 @@ class SurvivalShell extends StatefulWidget {
 }
 
 class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserver {
-  int _currentIndex = 0;
+  int _currentIndex = 2; // Paint tab (center)
 
   @override
   void initState() {
@@ -141,99 +141,129 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: Column(
         children: [
-          Positioned.fill(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: const [
-                HomeScreen(),
-                UpgradesScreen(),
-                MarketplaceScreen(),
-                EventScreen(),
-                ProfileScreen(),
-              ],
-            ),
-          ),
-          // Username + currency pills (only on Paint screen)
-          if (_currentIndex == 0) ...[
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
-              left: 12,
-              child: Consumer2<UserService, GameService>(
-                builder: (context, us, gs, _) {
-                  final name = us.username ?? '';
-                  if (name.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2A2A2A).withOpacity(0.85),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                          if (gs.streak > 0) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFF6B35).withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    '\u{1F525}',
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${gs.streak}',
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: const [
+                      MarketplaceScreen(),  // 0: Trade
+                      SocialScreen(),       // 1: Social
+                      HomeScreen(),         // 2: Paint (center)
+                      UpgradesScreen(),     // 3: Level Up
+                      ProfileScreen(),      // 4: Profile
+                    ],
+                  ),
+                ),
+                // Username + currency HUD (only on Paint screen)
+                if (_currentIndex == 2) ...[
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 8,
+                    left: 10,
+                    child: Consumer2<UserService, GameService>(
+                      builder: (context, us, gs, _) {
+                        final name = us.username ?? '';
+                        if (name.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _CrossyHudTile(
+                                  color: const Color(0xFF2A2A2A),
+                                  child: Text(
+                                    name,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w900,
-                                      fontSize: 14,
+                                      fontSize: 15,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                if (gs.streak > 0) ...[
+                                  const SizedBox(width: 4),
+                                  _CrossyHudTile(
+                                    color: const Color(0xFF2A2A2A),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text('\u{1F525}', style: TextStyle(fontSize: 13)),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${gs.streak}',
+                                          style: const TextStyle(
+                                            color: Color(0xFFFF6B35),
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            _CrossyHudTile(
+                              color: const Color(0xFF2A2A2A),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Image.asset('assets/images/UI/coin250.png', width: 20, height: 20),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _formatCurrencyValue(gs.cash),
+                                    style: const TextStyle(
+                                      color: Color(0xFFF5C842),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _CrossyHudTile(
+                              color: const Color(0xFF2A2A2A),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Image.asset('assets/images/UI/diamond250.png', width: 20, height: 20),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _formatCurrencyValue(gs.gems.toDouble()),
+                                    style: const TextStyle(
+                                      color: Color(0xFFDA70D6),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      _CurrencyPill(
-                        value: _formatCurrencyValue(gs.cash),
-                        iconAsset: 'assets/images/UI/coin250.png',
-                      ),
-                      const SizedBox(height: 4),
-                      _CurrencyPill(
-                        value: _formatCurrencyValue(gs.gems.toDouble()),
-                        iconAsset: 'assets/images/UI/diamond250.png',
-                      ),
-                    ],
-                  );
-                },
-              ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
+          // Crossy Road-style nav bar
+          _CrossyNavBar(
+            currentIndex: _currentIndex,
+            onTap: (i) => setState(() => _currentIndex = i),
+          ),
         ],
       ),
-      bottomNavigationBar: _buildNav(),
     );
   }
 
@@ -246,101 +276,98 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
     }
     return buf.toString();
   }
-
-  Widget _buildNav() {
-    final items = [
-      (Icons.format_paint, 'Paint'),
-      (Icons.arrow_upward_rounded, 'Upgrades'),
-      (Icons.storefront_rounded, 'Market'),
-      (Icons.celebration, 'Events'),
-      (Icons.person, 'Profile'),
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF6B5038),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: items.asMap().entries.map((entry) {
-              final i = entry.key;
-              final (icon, label) = entry.value;
-              final isActive = i == _currentIndex;
-
-              return GestureDetector(
-                onTap: () => setState(() => _currentIndex = i),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isActive ? const Color(0xFFF5C842).withOpacity(0.18) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        icon,
-                        color: isActive ? const Color(0xFFF5C842) : Colors.white60,
-                        size: 22,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: isActive ? const Color(0xFFF5C842) : Colors.white60,
-                          fontSize: 10,
-                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-class _CurrencyPill extends StatelessWidget {
-  final String value;
-  final String iconAsset;
+class _CrossyHudTile extends StatelessWidget {
+  final Color color;
+  final Widget child;
 
-  const _CurrencyPill({required this.value, required this.iconAsset});
+  const _CrossyHudTile({required this.color, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A).withOpacity(0.85),
-        borderRadius: BorderRadius.circular(20),
+        color: color,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFF111111), width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x44000000),
+            offset: Offset(0, 2),
+            blurRadius: 0,
+          ),
+        ],
       ),
-      child: Row(
+      child: child,
+    );
+  }
+}
+
+class _CrossyNavBar extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const _CrossyNavBar({required this.currentIndex, required this.onTap});
+
+  static const _icons = [
+    Icons.storefront_rounded,    // 0: Trade
+    Icons.public_rounded,        // 1: Social
+    Icons.format_paint,          // 2: Paint (center)
+    Icons.arrow_upward_rounded,  // 3: Level Up
+    Icons.person,                // 4: Me
+  ];
+
+  static const _colors = [
+    Color(0xFF38BDF8), // Trade: sky blue
+    Color(0xFFFF6B6B), // Social: coral
+    Color(0xFFF5C842), // Paint: gold
+    Color(0xFF4ADE80), // Level Up: green
+    Color(0xFFA855F7), // Me: purple
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      color: const Color(0xFF2A2A2A),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset(
-            iconAsset,
-            width: 22,
-            height: 22,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+          SizedBox(
+            height: 56,
+            child: Row(
+              children: List.generate(5, (i) {
+                final isActive = i == currentIndex;
+                final color = _colors[i];
+
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => onTap(i),
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      color: isActive ? color : const Color(0xFF2A2A2A),
+                      child: Center(
+                        child: Icon(
+                          _icons[i],
+                          color: isActive
+                              ? const Color(0xFF1A1A1A)
+                              : Colors.white30,
+                          size: isActive ? 30 : 26,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ),
           ),
+          if (bottomPad > 0)
+            Container(height: bottomPad, color: const Color(0xFF2A2A2A)),
         ],
       ),
     );

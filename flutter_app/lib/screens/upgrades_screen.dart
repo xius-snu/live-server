@@ -7,6 +7,16 @@ import '../models/house.dart';
 class UpgradesScreen extends StatelessWidget {
   const UpgradesScreen({super.key});
 
+  static String _formatWithCommas(double value) {
+    final whole = value.toStringAsFixed(0);
+    final buf = StringBuffer();
+    for (int i = 0; i < whole.length; i++) {
+      if (i > 0 && (whole.length - i) % 3 == 0) buf.write(',');
+      buf.write(whole[i]);
+    }
+    return buf.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -23,13 +33,76 @@ class UpgradesScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Upgrades',
-                          style: TextStyle(
-                            color: Color(0xFF6B5038),
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Upgrades',
+                              style: TextStyle(
+                                color: Color(0xFF6B5038),
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Spacer(),
+                            // Coin balance
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2A2A2A),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF111111), width: 1.5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/UI/coin250.png',
+                                    width: 18,
+                                    height: 18,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    _formatWithCommas(gameService.cash),
+                                    style: const TextStyle(
+                                      color: Color(0xFFF5C842),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Gem balance
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2A2A2A),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF111111), width: 1.5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/UI/diamond250.png',
+                                    width: 18,
+                                    height: 18,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    _formatWithCommas(gameService.gems.toDouble()),
+                                    style: const TextStyle(
+                                      color: Color(0xFFDA70D6),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 20),
                       ],
@@ -63,7 +136,6 @@ class _ProgressionCards extends StatelessWidget {
     final canAffordRoller = gameService.canAffordRollerUpgrade;
     final houseBlocked = gameService.houseLevelBlocked;
     final rollerBlocked = gameService.rollerLevelBlocked;
-
     // Current house info
     final currentHouseDef = gameService.currentHouseDef;
     final currentCycleLevel = HouseDefinition.cycleLevelFor(progress.houseLevel);

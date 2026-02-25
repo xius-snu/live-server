@@ -191,19 +191,25 @@ class WallComponent extends PositionComponent {
   }
 
   void _renderPatternShapes(Canvas canvas) {
+    // Pattern fills and outlines are now rendered by WallPatternOverlay
+    // (above paint stripes) so the semi-transparent black tint also
+    // darkens the painted regions. Nothing to draw here.
+  }
+
+  /// Render only the pattern shape outlines (black strokes).
+  /// Called by WallPatternOverlay at a higher priority so outlines
+  /// appear on top of paint stripes.
+  void renderPatternOutlines(Canvas canvas) {
     if (_patternShapes.isEmpty) return;
 
     final patternDef = WallPatternDef.forHouseIndex(houseTier);
 
-    final fillPaint = Paint()..color = patternDef.fillColor;
+    // Semi-transparent black fill — darkens both wall and paint underneath
+    final fillPaint = Paint()..color = Colors.black.withOpacity(0.12);
     final strokePaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = patternDef.strokeWidth;
-    final highlightPaint = Paint()
-      ..color = Colors.white.withOpacity(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
 
     for (final shape in _patternShapes) {
       canvas.save();
@@ -211,77 +217,7 @@ class WallComponent extends PositionComponent {
 
       switch (patternDef.shape) {
         case PatternShape.square:
-          final rect = Rect.fromCenter(
-            center: Offset.zero,
-            width: shape.width,
-            height: shape.height,
-          );
-          canvas.drawRect(rect, fillPaint);
-          canvas.drawRect(rect, strokePaint);
-          // Top-edge highlight
-          canvas.drawLine(
-            rect.topLeft + const Offset(1, 1),
-            rect.topRight + const Offset(-1, 1),
-            highlightPaint,
-          );
-          break;
-
         case PatternShape.plank:
-          final rect = Rect.fromCenter(
-            center: Offset.zero,
-            width: shape.width,
-            height: shape.height,
-          );
-          canvas.drawRect(rect, fillPaint);
-          canvas.drawRect(rect, strokePaint);
-          // Top-edge highlight
-          canvas.drawLine(
-            rect.topLeft + const Offset(1, 1),
-            rect.topRight + const Offset(-1, 1),
-            highlightPaint,
-          );
-          break;
-
-        case PatternShape.circle:
-          final r = shape.width / 2;
-          canvas.drawCircle(Offset.zero, r, fillPaint);
-          canvas.drawCircle(Offset.zero, r, strokePaint);
-          // Inner ring for log cross-section effect
-          final innerRingPaint = Paint()
-            ..color = patternDef.fillColor
-                .withOpacity(0.4)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2;
-          canvas.drawCircle(Offset.zero, r * 0.6, innerRingPaint);
-          // Small center dot
-          canvas.drawCircle(
-            Offset.zero,
-            r * 0.15,
-            Paint()..color = patternDef.fillColor.withOpacity(0.5),
-          );
-          break;
-
-        case PatternShape.roundedStone:
-          final rrect = RRect.fromRectAndRadius(
-            Rect.fromCenter(
-              center: Offset.zero,
-              width: shape.width,
-              height: shape.height,
-            ),
-            Radius.circular(shape.cornerRadius),
-          );
-          canvas.drawRRect(rrect, fillPaint);
-          canvas.drawRRect(rrect, strokePaint);
-          // Top-edge highlight
-          final stoneHalfW = shape.width / 2 - shape.cornerRadius;
-          final stoneTopY = -shape.height / 2 + 1.5;
-          canvas.drawLine(
-            Offset(-stoneHalfW, stoneTopY),
-            Offset(stoneHalfW, stoneTopY),
-            highlightPaint,
-          );
-          break;
-
         case PatternShape.brick:
           final rect = Rect.fromCenter(
             center: Offset.zero,
@@ -290,33 +226,13 @@ class WallComponent extends PositionComponent {
           );
           canvas.drawRect(rect, fillPaint);
           canvas.drawRect(rect, strokePaint);
-          // Top-edge highlight
-          canvas.drawLine(
-            rect.topLeft + const Offset(1, 1),
-            rect.topRight + const Offset(-1, 1),
-            highlightPaint,
-          );
           break;
-
-        case PatternShape.diamond:
-          // Rotate 45° to make a diamond
-          canvas.rotate(pi / 4);
-          final half = shape.width / 2;
-          final rect = Rect.fromCenter(
-            center: Offset.zero,
-            width: half * 1.0,
-            height: half * 1.0,
-          );
-          canvas.drawRect(rect, fillPaint);
-          canvas.drawRect(rect, strokePaint);
-          // Top-edge highlight (in rotated space)
-          canvas.drawLine(
-            rect.topLeft + const Offset(1, 1),
-            rect.topRight + const Offset(-1, 1),
-            highlightPaint,
-          );
+        case PatternShape.circle:
+          final r = shape.width / 2;
+          canvas.drawCircle(Offset.zero, r, fillPaint);
+          canvas.drawCircle(Offset.zero, r, strokePaint);
           break;
-
+        case PatternShape.roundedStone:
         case PatternShape.panel:
           final rrect = RRect.fromRectAndRadius(
             Rect.fromCenter(
@@ -328,24 +244,17 @@ class WallComponent extends PositionComponent {
           );
           canvas.drawRRect(rrect, fillPaint);
           canvas.drawRRect(rrect, strokePaint);
-          // Inner ornate border
-          if (shape.width > 12 && shape.height > 16) {
-            final innerRrect = RRect.fromRectAndRadius(
-              Rect.fromCenter(
-                center: Offset.zero,
-                width: shape.width - 8,
-                height: shape.height - 8,
-              ),
-              Radius.circular(max(0, shape.cornerRadius - 2)),
-            );
-            canvas.drawRRect(
-              innerRrect,
-              Paint()
-                ..color = Colors.white.withOpacity(0.08)
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 1.0,
-            );
-          }
+          break;
+        case PatternShape.diamond:
+          canvas.rotate(pi / 4);
+          final half = shape.width / 2;
+          final rect = Rect.fromCenter(
+            center: Offset.zero,
+            width: half * 1.0,
+            height: half * 1.0,
+          );
+          canvas.drawRect(rect, fillPaint);
+          canvas.drawRect(rect, strokePaint);
           break;
       }
 

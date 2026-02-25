@@ -1,11 +1,11 @@
 {
-    "name": "Rich Roller",
-    "short_name": "RichRoller",
+    "name": "Rich Roller, Poor Roller",
+    "short_name": "RRPR",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1A1A2E",
     "theme_color": "#1A1A2E",
-    "description": "Rich Roller - Idle Clicker Game",
+    "description": "Rich Roller, Poor Roller - Idle Clicker Game",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

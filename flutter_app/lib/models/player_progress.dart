@@ -17,6 +17,9 @@ class PlayerProgress {
   double totalCoverageAccumulated; // sum of all wall coverages for averaging
   Set<String> ownedSkins;
   String equippedSkin;
+  /// Whether the player has achieved 100% coverage on the current house level.
+  /// Resets when house level advances. Must be true to upgrade house.
+  bool hasPerfectedCurrentHouse;
 
   PlayerProgress({
     this.cash = 0,
@@ -31,6 +34,7 @@ class PlayerProgress {
     this.totalCoverageAccumulated = 0,
     Set<String>? ownedSkins,
     this.equippedSkin = 'default',
+    this.hasPerfectedCurrentHouse = false,
   })  : upgradeLevels = upgradeLevels ?? {},
         lastOnlineAt = lastOnlineAt ?? DateTime.now(),
         ownedSkins = ownedSkins ?? {'default'};
@@ -110,6 +114,7 @@ class PlayerProgress {
         'totalCoverageAccumulated': totalCoverageAccumulated,
         'ownedSkins': ownedSkins.toList(),
         'equippedSkin': equippedSkin,
+        'hasPerfectedCurrentHouse': hasPerfectedCurrentHouse,
       };
 
   factory PlayerProgress.fromJson(Map<String, dynamic> json) {
@@ -157,6 +162,7 @@ class PlayerProgress {
           ? Set<String>.from(json['ownedSkins'] as List)
           : {'default'},
       equippedSkin: json['equippedSkin'] as String? ?? 'default',
+      hasPerfectedCurrentHouse: json['hasPerfectedCurrentHouse'] as bool? ?? false,
     );
   }
 

@@ -134,12 +134,13 @@ class _HomeScreenState extends State<HomeScreen>
   void _configureGame() {
     final gameService = Provider.of<GameService>(context, listen: false);
     final audioService = Provider.of<AudioService>(context, listen: false);
-    final room = gameService.currentRoomDef;
-    final house = gameService.currentHouseDef;
+    // Use the randomized visual house tier for wall appearance
+    final visualHouse = gameService.visualHouseDef;
+    final room = visualHouse.room;
 
-    // House tier 0-6 based on type index
-    final houseTier = house.typeIndex;
-    final cycleLevel = HouseDefinition.cycleLevelFor(gameService.houseLevel);
+    // House tier 0-6 based on visual type index
+    final houseTier = visualHouse.typeIndex;
+    final cycleLevel = gameService.visualCycleLevel;
 
     _game.configure(
       rollerWidthFraction: gameService.rollerWidthPercent,
@@ -148,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen>
       room: room,
       houseTier: houseTier,
       cycleLevel: cycleLevel,
-      borderColor: house.borderColor,
+      borderColor: visualHouse.borderColor,
       rollerPaintColor: gameService.equippedPaintColor,
     );
 
@@ -196,8 +197,10 @@ class _HomeScreenState extends State<HomeScreen>
 
     HapticFeedback.mediumImpact();
 
-    // Start wall slide immediately — payout overlay fades out on its own
-    _autoNextHouse();
+    // Brief pause to admire the finished wall, then slide to next
+    Future.delayed(const Duration(milliseconds: 450), () {
+      if (mounted) _autoNextHouse();
+    });
 
     // Hide payout overlay after its animation finishes
     Future.delayed(const Duration(milliseconds: 1200), () {
@@ -233,8 +236,8 @@ class _HomeScreenState extends State<HomeScreen>
       drawY = 0;
     }
 
-    const wallTopFraction = 0.296;
-    const wallBottomFraction = 0.710;
+    const wallTopFraction = 0.32;
+    const wallBottomFraction = 0.72;
 
     final wallTop = drawY + drawH * wallTopFraction;
     final wallBottom = drawY + drawH * wallBottomFraction;
@@ -251,6 +254,13 @@ class _HomeScreenState extends State<HomeScreen>
         return LayoutBuilder(builder: (context, constraints) {
         final gameSize = Size(constraints.maxWidth, constraints.maxHeight);
         final wallRect = _computeWallRect(gameSize);
+        // Actual game wall is 85% of bg wall width, centered (matches paint_roller_game.dart)
+        // Actual game wall matches paint_roller_game.dart layout
+        final gameWallWidth = (wallRect.width * 0.90).clamp(80.0, 420.0);
+        final gameWallRight = wallRect.left + (wallRect.width + gameWallWidth) / 2;
+        final gameWallTop = wallRect.top + wallRect.height * 0.03;
+        final gameWallHeight = (wallRect.height * 0.88).clamp(80.0, 2000.0);
+        final gameWallBottom = gameWallTop + gameWallHeight;
 
         return Stack(
           children: [
@@ -259,37 +269,25 @@ class _HomeScreenState extends State<HomeScreen>
 
             // === House name + info, cat, stroke count — stays in place, no slide ===
             Positioned(
-              top: wallRect.top - 70,
+              top: wallRect.top - 56,
               left: 0,
               right: 0,
-              child: Column(
-                children: [
-                  Text(
-                    gameService.progress.houseDisplayName.toUpperCase(),
-                    style: const TextStyle(
-                      color: Color(0xFF2A2A2A),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'House Lv.${gameService.houseLevel} ${HouseDefinition.wallAreaDisplay(gameService.houseLevel)}  \u2022  Roller Lv.${gameService.rollerLevel} ${HouseDefinition.rollerWidthDisplay(gameService.rollerLevel, gameService.houseLevel)}',
-                    style: TextStyle(
-                      color: const Color(0xFF2A2A2A).withOpacity(0.5),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+              child: Text(
+                gameService.visualHouseDef.displayName(gameService.visualCycleLevel).toUpperCase(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF2A2A2A),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  letterSpacing: 1.5,
+                ),
               ),
             ),
 
             // Cat sleeping on top-right corner of wall border (slides with wall)
             Positioned(
-              top: wallRect.top - 40,
-              left: wallRect.right - 85 + _slideFraction * gameSize.width,
+              top: wallRect.top - 22,
+              left: gameWallRight - 100 + _slideFraction * gameSize.width,
               child: Image.asset(
                 'assets/images/home/cat.png',
                 width: 100,
@@ -298,10 +296,10 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-            // Stroke counter below wall
+            // Stroke counter below game wall
             if (roundState != null)
               Positioned(
-                top: wallRect.bottom + 4,
+                top: gameWallBottom + 18,
                 left: 0,
                 right: 0,
                 child: Center(
@@ -316,10 +314,10 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-            // === Tap prompt ===
+            // === Tap prompt (below the roller) ===
             if (!_roundComplete)
               Positioned(
-                bottom: 8,
+                top: gameWallBottom + 190,
                 left: 16,
                 right: 16,
                 child: _PulsingText(

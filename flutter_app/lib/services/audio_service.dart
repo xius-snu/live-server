@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Manages all game audio: background music loop and one-shot SFX.
 class AudioService extends ChangeNotifier {
@@ -11,12 +12,14 @@ class AudioService extends ChangeNotifier {
   final AudioPlayer _rollerSfxPlayer = AudioPlayer();
   final AudioPlayer _roundCompleteSfxPlayer = AudioPlayer();
 
-  bool _musicEnabled = false; // TODO: re-enable
+  bool _musicEnabled = false;
   bool _sfxEnabled = true;
+  bool _hapticEnabled = true;
   bool _bgmStarted = false;
 
   bool get musicEnabled => _musicEnabled;
   bool get sfxEnabled => _sfxEnabled;
+  bool get hapticEnabled => _hapticEnabled;
 
   AudioService() {
     _bgmPlayer.setReleaseMode(ReleaseMode.loop);
@@ -51,6 +54,26 @@ class AudioService extends ChangeNotifier {
 
     _rollerSfxPlayer.setVolume(0.6);
     _roundCompleteSfxPlayer.setVolume(0.7);
+
+    loadPrefs();
+  }
+
+  /// Load persisted audio/haptic preferences from SharedPreferences.
+  Future<void> loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    _musicEnabled = prefs.getBool('audio_musicEnabled') ?? false;
+    _sfxEnabled = prefs.getBool('audio_sfxEnabled') ?? true;
+    _hapticEnabled = prefs.getBool('audio_hapticEnabled') ?? true;
+    if (_musicEnabled) startBgm();
+    notifyListeners();
+  }
+
+  /// Save current audio/haptic preferences to SharedPreferences.
+  Future<void> _savePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('audio_musicEnabled', _musicEnabled);
+    await prefs.setBool('audio_sfxEnabled', _sfxEnabled);
+    await prefs.setBool('audio_hapticEnabled', _hapticEnabled);
   }
 
   /// Start background music. Safe to call multiple times — only starts once.
@@ -110,12 +133,21 @@ class AudioService extends ChangeNotifier {
     } else {
       stopBgm();
     }
+    _savePrefs();
     notifyListeners();
   }
 
   /// Toggle SFX on/off.
   void toggleSfx() {
     _sfxEnabled = !_sfxEnabled;
+    _savePrefs();
+    notifyListeners();
+  }
+
+  /// Toggle haptic feedback on/off.
+  void toggleHaptic() {
+    _hapticEnabled = !_hapticEnabled;
+    _savePrefs();
     notifyListeners();
   }
 

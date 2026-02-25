@@ -9,6 +9,7 @@ import 'services/audio_service.dart';
 import 'services/marketplace_service.dart';
 import 'services/event_service.dart';
 import 'services/leaderboard_service.dart';
+import 'services/guild_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,9 +53,10 @@ class PaintRollerApp extends StatelessWidget {
           ),
           update: (_, user, prev) => prev!,
         ),
+        ChangeNotifierProvider(create: (_) => GuildService()),
       ],
       child: MaterialApp(
-        title: 'Rich Roller',
+        title: 'Rich Roller, Poor Roller',
         theme: ThemeData.dark().copyWith(
           scaffoldBackgroundColor: const Color(0xFFE8D5B8),
           textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
@@ -167,7 +169,7 @@ class _UsernameSetupScreenState extends State<_UsernameSetupScreen> {
               const Text('🎨', style: TextStyle(fontSize: 56)),
               const SizedBox(height: 16),
               const Text(
-                'Rich Roller',
+                'Rich Roller, Poor Roller',
                 style: TextStyle(
                   color: Color(0xFF6B5038),
                   fontSize: 28,

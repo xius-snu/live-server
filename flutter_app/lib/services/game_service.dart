@@ -26,6 +26,11 @@ class RollerSkinDef {
 class GameService extends ChangeNotifier {
   PlayerProgress _progress = PlayerProgress();
   bool _initialized = false;
+  final Random _rng = Random();
+
+  /// The house level used for the current wall's visual appearance.
+  /// Randomized each wall from a weighted pool of recently unlocked tiers.
+  int _visualHouseLevel = 1;
 
   PlayerProgress get progress => _progress;
   bool get initialized => _initialized;
@@ -34,9 +39,9 @@ class GameService extends ChangeNotifier {
   static const List<RollerSkinDef> rollerSkinDefs = [
     RollerSkinDef(id: 'default', name: 'Default', asset: 'default.png', price: 0, paintColor: Color(0xFFFF3B30)),       // bright red
     RollerSkinDef(id: 'pudding', name: 'Pudding', asset: 'pudding.png', price: 500, paintColor: Color(0xFFFF9500)),     // vivid orange
-    RollerSkinDef(id: 'pancake', name: 'Pancake', asset: 'pancake.png', price: 2000, paintColor: Color(0xFFFF2D90)),    // hot pink
-    RollerSkinDef(id: 'bunny', name: 'Bunny', asset: 'bunny.png', price: 8000, paintColor: Color(0xFF5856D6)),          // electric purple
-    RollerSkinDef(id: 'kitty', name: 'Kitty', asset: 'kitty.png', price: 25000, paintColor: Color(0xFF30D158)),         // neon green
+    RollerSkinDef(id: 'pancake', name: 'Pancake', asset: 'pancake.png', price: 2000, paintColor: Color(0xFF8B5CF6)),    // soft violet
+    RollerSkinDef(id: 'bunny', name: 'Bunny', asset: 'bunny.png', price: 8000, paintColor: Color(0xFF06B6D4)),          // cyan
+    RollerSkinDef(id: 'kitty', name: 'Kitty', asset: 'kitty.png', price: 25000, paintColor: Color(0xFFF472B6)),         // pastel pink
     RollerSkinDef(id: 'money', name: 'Money', asset: 'money.png', price: 80000, paintColor: Color(0xFFFFD700)),         // gold
   ];
 
@@ -59,10 +64,23 @@ class GameService extends ChangeNotifier {
   HouseDefinition get currentHouseDef => _progress.currentHouseDef;
   RoomDefinition get currentRoomDef => currentHouseDef.room;
 
+  /// Visual house level for the current wall (randomized each round).
+  int get visualHouseLevel => _visualHouseLevel;
+  HouseDefinition get visualHouseDef => HouseDefinition.getForHouseLevel(_visualHouseLevel);
+  int get visualCycleLevel => HouseDefinition.cycleLevelFor(_visualHouseLevel);
+
   Future<void> init() async {
     await _loadLocally();
+    _rollVisualHouseLevel();
     _initialized = true;
     notifyListeners();
+  }
+
+  /// Roll a new random visual house level from the weighted tier pool.
+  void _rollVisualHouseLevel() {
+    _visualHouseLevel = HouseDefinition.randomWeightedHouseLevel(
+      _progress.houseLevel, _rng,
+    );
   }
 
   Future<void> _loadLocally() async {
@@ -127,6 +145,9 @@ class GameService extends ChangeNotifier {
     _progress.totalCashEarned += totalPayout;
     _progress.totalCoverageAccumulated += coverage.clamp(0.0, 1.0);
     _progress.totalWallsPainted++;
+    if (coverage >= 1.0) {
+      _progress.hasPerfectedCurrentHouse = true;
+    }
     _progress.lastOnlineAt = DateTime.now();
 
     _saveLocally();
@@ -166,10 +187,10 @@ class GameService extends ChangeNotifier {
     return _progress.cash >= def.costForLevel(currentLevel);
   }
 
-  /// Advance to next house after painting (free, just next wall of same level).
-  /// The house type stays the same within a level — you paint the same house
-  /// repeatedly until you upgrade.
+  /// Advance to next wall after painting. Rolls a new random house type
+  /// from the weighted pool of recently unlocked tiers.
   void nextHouseFree() {
+    _rollVisualHouseLevel();
     _progress.lastOnlineAt = DateTime.now();
     _saveLocally();
     notifyListeners();
@@ -183,6 +204,8 @@ class GameService extends ChangeNotifier {
 
     _progress.cash -= cost;
     _progress.houseLevel++;
+    _progress.hasPerfectedCurrentHouse = false;
+    _rollVisualHouseLevel();
     _progress.lastOnlineAt = DateTime.now();
     _saveLocally();
     notifyListeners();
@@ -274,6 +297,13 @@ class GameService extends ChangeNotifier {
     if (!ownsSkin(skinId)) return;
     if (_progress.equippedSkin == skinId) return;
     _progress.equippedSkin = skinId;
+    _saveLocally();
+    notifyListeners();
+  }
+
+  /// Add debug coins without affecting leaderboard stats.
+  void addDebugCoins(double amount) {
+    _progress.cash += amount;
     _saveLocally();
     notifyListeners();
   }
