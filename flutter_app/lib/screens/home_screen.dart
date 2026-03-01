@@ -7,6 +7,7 @@ import '../game/paint_roller_game.dart';
 import '../services/game_service.dart';
 import '../services/audio_service.dart';
 import '../services/leaderboard_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/format_utils.dart';
 
@@ -183,6 +184,14 @@ class _HomeScreenState extends State<HomeScreen>
     // Fire-and-forget leaderboard stat submission
     final lbService = Provider.of<LeaderboardService>(context, listen: false);
     lbService.submitRoundStats(coverage, payout + streakBonus);
+
+    // Sync progress to server every 5 walls so friends see real stats
+    if (gameService.progress.totalWallsPainted % 5 == 0) {
+      final userService = Provider.of<UserService>(context, listen: false);
+      if (userService.userId != null) {
+        gameService.syncProgressToServer(userService.baseUrl, userService.userId!);
+      }
+    }
 
     audioService.playRoundComplete(streak: gameService.streak);
 

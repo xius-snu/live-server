@@ -847,6 +847,8 @@ class _FriendsTab extends StatefulWidget {
 
 class _FriendsTabState extends State<_FriendsTab> {
   List<Map<String, dynamic>> _friends = [];
+  List<Map<String, dynamic>> _incoming = [];
+  List<Map<String, dynamic>> _outgoing = [];
   bool _loading = true;
 
   @override
@@ -857,8 +859,13 @@ class _FriendsTabState extends State<_FriendsTab> {
 
   Future<void> _loadFriends() async {
     final us = Provider.of<UserService>(context, listen: false);
-    final friends = await us.listFriends();
-    if (mounted) setState(() { _friends = friends; _loading = false; });
+    final data = await us.listFriends();
+    if (mounted) setState(() {
+      _friends = List<Map<String, dynamic>>.from(data['friends'] ?? []);
+      _incoming = List<Map<String, dynamic>>.from(data['incoming'] ?? []);
+      _outgoing = List<Map<String, dynamic>>.from(data['outgoing'] ?? []);
+      _loading = false;
+    });
   }
 
   void _showAddDialog() {
@@ -898,7 +905,7 @@ class _FriendsTabState extends State<_FriendsTab> {
               final code = codeCtrl.text.trim();
               if (code.isEmpty) return;
               Navigator.pop(ctx);
-              await _addByCode(code);
+              await _sendRequest(code);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -908,7 +915,7 @@ class _FriendsTabState extends State<_FriendsTab> {
     );
   }
 
-  Future<void> _addByCode(String code) async {
+  Future<void> _sendRequest(String code) async {
     final us = Provider.of<UserService>(context, listen: false);
     final user = await us.lookupByFriendCode(code);
     if (!mounted) return;
@@ -924,18 +931,46 @@ class _FriendsTabState extends State<_FriendsTab> {
       );
       return;
     }
-    final success = await us.addFriend(user['user_id']);
+    final result = await us.sendFriendRequest(user['user_id']);
+    if (!mounted) return;
+    if (result != null && result['status'] == 'accepted') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('You and ${user['username']} are now friends!'), backgroundColor: AppColors.badgeGreen),
+      );
+    } else if (result != null && result['status'] == 'pending') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Request sent to ${user['username']}!'), backgroundColor: AppColors.badgeGreen),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result?['error'] ?? 'Failed to send request'), backgroundColor: AppColors.dangerRed),
+      );
+    }
+    _loadFriends();
+  }
+
+  Future<void> _acceptRequest(String requesterId) async {
+    final us = Provider.of<UserService>(context, listen: false);
+    final success = await us.acceptFriendRequest(requesterId);
     if (!mounted) return;
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${user['username']}!'), backgroundColor: AppColors.badgeGreen),
-      );
-      _loadFriends();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to add friend'), backgroundColor: AppColors.dangerRed),
+        const SnackBar(content: Text('Friend request accepted!'), backgroundColor: AppColors.badgeGreen),
       );
     }
+    _loadFriends();
+  }
+
+  Future<void> _declineRequest(String requesterId) async {
+    final us = Provider.of<UserService>(context, listen: false);
+    await us.declineFriendRequest(requesterId);
+    if (mounted) _loadFriends();
+  }
+
+  Future<void> _cancelRequest(String friendId) async {
+    final us = Provider.of<UserService>(context, listen: false);
+    await us.cancelFriendRequest(friendId);
+    if (mounted) _loadFriends();
   }
 
   void _showFriendProfile(Map<String, dynamic> friend) {
@@ -955,8 +990,20 @@ class _FriendsTabState extends State<_FriendsTab> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              const Expanded(
-                child: Text('FRIENDS', style: TextStyle(color: AppColors.brownMid, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2)),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Text('FRIENDS', style: TextStyle(color: AppColors.brownMid, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                    if (_incoming.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: AppColors.dangerRed, borderRadius: BorderRadius.circular(10)),
+                        child: Text('${_incoming.length}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               GestureDetector(
                 onTap: _showAddDialog,
@@ -983,7 +1030,7 @@ class _FriendsTabState extends State<_FriendsTab> {
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-              : _friends.isEmpty
+              : (_friends.isEmpty && _incoming.isEmpty && _outgoing.isEmpty)
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(40),
@@ -1001,77 +1048,191 @@ class _FriendsTabState extends State<_FriendsTab> {
                     )
                   : RefreshIndicator(
                       onRefresh: _loadFriends,
-                      child: ListView.builder(
+                      child: ListView(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _friends.length,
-                        itemBuilder: (context, index) {
-                          final friend = _friends[index];
-                          return GestureDetector(
-                            onTap: () => _showFriendProfile(friend),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 6),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardCream,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.borderBrown, width: 1.5),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 40, height: 40,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.background,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: AppColors.brownDark, width: 2),
+                        children: [
+                          // --- Incoming friend requests ---
+                          if (_incoming.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 6, top: 4),
+                              child: Text('FRIEND REQUESTS', style: TextStyle(color: AppColors.dangerRed, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                            ),
+                            for (final req in _incoming)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.dangerRed.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.dangerRed.withOpacity(0.3), width: 1.5),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36, height: 36,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.background,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.brownDark, width: 2),
+                                      ),
+                                      child: const Center(child: Text('\u{1F3A8}', style: TextStyle(fontSize: 16))),
                                     ),
-                                    child: const Center(child: Text('\u{1F3A8}', style: TextStyle(fontSize: 18))),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          friend['username'] ?? 'Unknown',
-                                          style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 14),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '#${friend['friend_code'] ?? ''}',
-                                          style: const TextStyle(color: AppColors.brownLight, fontSize: 11),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Image.asset('assets/images/UI/coin250.png', width: 12, height: 12),
-                                          const SizedBox(width: 3),
+                                          Text(req['username'] ?? 'Unknown', style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 13)),
+                                          Text('#${req['friend_code'] ?? ''}', style: const TextStyle(color: AppColors.brownLight, fontSize: 10)),
+                                        ],
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => _acceptRequest(req['user_id']),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(color: AppColors.badgeGreen, borderRadius: BorderRadius.circular(6)),
+                                        child: const Text('Accept', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () => _declineRequest(req['user_id']),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                        decoration: BoxDecoration(color: AppColors.brownLight.withOpacity(0.3), borderRadius: BorderRadius.circular(6)),
+                                        child: const Icon(Icons.close, size: 14, color: AppColors.brownDark),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                          ],
+                          // --- Outgoing pending requests ---
+                          if (_outgoing.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 6),
+                              child: Text('PENDING REQUESTS', style: TextStyle(color: AppColors.brownMid, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                            ),
+                            for (final req in _outgoing)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cardCream,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.borderBrown, width: 1),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36, height: 36,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.background,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.brownDark, width: 2),
+                                      ),
+                                      child: const Center(child: Text('\u{1F3A8}', style: TextStyle(fontSize: 16))),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(req['username'] ?? 'Unknown', style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 13)),
+                                          const Text('Pending...', style: TextStyle(color: AppColors.brownLight, fontSize: 10, fontStyle: FontStyle.italic)),
+                                        ],
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => _cancelRequest(req['user_id']),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(color: AppColors.brownLight.withOpacity(0.3), borderRadius: BorderRadius.circular(6)),
+                                        child: const Text('Cancel', style: TextStyle(color: AppColors.brownDark, fontSize: 11, fontWeight: FontWeight.w600)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                          ],
+                          // --- Accepted friends ---
+                          if (_friends.isNotEmpty) ...[
+                            if (_incoming.isNotEmpty || _outgoing.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 6),
+                                child: Text('FRIENDS', style: TextStyle(color: AppColors.brownMid, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                              ),
+                            for (final friend in _friends)
+                              GestureDetector(
+                                onTap: () => _showFriendProfile(friend),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardCream,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: AppColors.borderBrown, width: 1.5),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 40, height: 40,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.background,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppColors.brownDark, width: 2),
+                                        ),
+                                        child: const Center(child: Text('\u{1F3A8}', style: TextStyle(fontSize: 18))),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              friend['username'] ?? 'Unknown',
+                                              style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 14),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '#${friend['friend_code'] ?? ''}',
+                                              style: const TextStyle(color: AppColors.brownLight, fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Image.asset('assets/images/UI/coin250.png', width: 12, height: 12),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                fmtCommas((friend['cash'] ?? 0).toDouble()),
+                                                style: const TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w700),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
                                           Text(
-                                            fmtCommas((friend['cash'] ?? 0).toDouble()),
-                                            style: const TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w700),
+                                            '${friend['total_walls_painted'] ?? 0} walls',
+                                            style: const TextStyle(color: AppColors.brownLight, fontSize: 10),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${friend['total_walls_painted'] ?? 0} walls',
-                                        style: const TextStyle(color: AppColors.brownLight, fontSize: 10),
-                                      ),
+                                      const SizedBox(width: 6),
+                                      const Icon(Icons.chevron_right, color: AppColors.brownLight, size: 18),
                                     ],
                                   ),
-                                  const SizedBox(width: 6),
-                                  const Icon(Icons.chevron_right, color: AppColors.brownLight, size: 18),
-                                ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                          ],
+                        ],
                       ),
                     ),
         ),

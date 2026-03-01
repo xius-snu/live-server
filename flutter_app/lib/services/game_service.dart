@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/game_config.dart';
 import '../models/player_progress.dart';
@@ -98,6 +100,29 @@ class GameService extends ChangeNotifier {
   Future<void> _saveLocally() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('player_progress', _progress.toJsonString());
+  }
+
+  /// Sync progress to the server so friends can see real stats.
+  Future<void> syncProgressToServer(String baseUrl, String userId) async {
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/api/progress/save'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'userId': userId,
+          'cash': _progress.cash,
+          'stars': _progress.gems,
+          'prestigeLevel': _progress.houseLevel,
+          'currentHouse': _progress.currentHouse.name,
+          'currentRoom': 0,
+          'upgrades': {for (final e in _progress.upgradeLevels.entries) e.key.name: e.value},
+          'totalWallsPainted': _progress.totalWallsPainted,
+          'totalCashEarned': _progress.totalCashEarned,
+        }),
+      );
+    } catch (e) {
+      debugPrint('Sync progress to server error: $e');
+    }
   }
 
   /// Coverage bonus multiplier for high coverage rounds.

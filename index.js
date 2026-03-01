@@ -102,7 +102,10 @@ const PUBLIC_ROUTES = new Set([
     'GET:/api/user/:userId/profile',
     'POST:/api/friends/add',
     'POST:/api/friends/remove',
-    'GET:/api/admin/create-friends-table',
+    'POST:/api/friends/accept',
+    'POST:/api/friends/decline',
+    'POST:/api/friends/cancel',
+    'GET:/api/admin/migrate-friends',
 ]);
 
 async function authenticateRequest(req, reply) {
@@ -387,6 +390,15 @@ fastify.register(async function (fastify) {
                 PRIMARY KEY (user_id, friend_id)
             )
         `);
+        // Add status column for friend request flow
+        await pool.query(`ALTER TABLE friends ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'accepted'`);
+        // Backfill reciprocal rows for existing accepted friendships
+        await pool.query(`
+            INSERT INTO friends (user_id, friend_id, status)
+            SELECT friend_id, user_id, 'accepted'
+            FROM friends WHERE status = 'accepted'
+            ON CONFLICT DO NOTHING
+        `);
         console.log('Friends table migration complete');
     } catch (e) {
         console.log('Friends table migration note:', e.message);
@@ -458,6 +470,12 @@ fastify.register(async function (fastify) {
                 ON CONFLICT (user_id) DO UPDATE SET username = $2, auth_token_hash = $3, friend_code = COALESCE(users.friend_code, $4)
             `, [userId, trimmedName, newTokenHash, friendCode || null]);
 
+            // Ensure player_progress row exists so friend stats aren't empty
+            await pool.query(
+                'INSERT INTO player_progress (user_id) VALUES ($1) ON CONFLICT DO NOTHING',
+                [userId]
+            );
+
             return { success: true, username: trimmedName, token: newToken };
         } catch (e) {
             fastify.log.error('DB User Error: ' + e.message);
@@ -515,19 +533,17 @@ fastify.register(async function (fastify) {
         }
     });
 
-    // Admin: recreate friends table (debug)
-    fastify.get('/api/admin/create-friends-table', async (req, reply) => {
+    // Admin: migrate friends table
+    fastify.get('/api/admin/migrate-friends', async (req, reply) => {
         try {
-            await pool.query('DROP TABLE IF EXISTS friends');
+            await pool.query(`ALTER TABLE friends ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'accepted'`);
             await pool.query(`
-                CREATE TABLE friends (
-                    user_id TEXT NOT NULL REFERENCES users(user_id),
-                    friend_id TEXT NOT NULL REFERENCES users(user_id),
-                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (user_id, friend_id)
-                )
+                INSERT INTO friends (user_id, friend_id, status)
+                SELECT friend_id, user_id, 'accepted'
+                FROM friends WHERE status = 'accepted'
+                ON CONFLICT DO NOTHING
             `);
-            return { success: true, message: 'Friends table recreated' };
+            return { success: true, message: 'Friends table migrated with status column' };
         } catch (e) {
             return { error: e.message };
         }
@@ -553,29 +569,123 @@ fastify.register(async function (fastify) {
         }
     });
 
-    // Add friend
+    // Send friend request (or auto-accept if they already sent one to us)
     fastify.post('/api/friends/add', async (req, reply) => {
         const { userId, friendId } = req.body;
         if (!userId || !friendId) return reply.code(400).send({ error: 'Missing userId or friendId' });
         if (userId === friendId) return reply.code(400).send({ error: 'Cannot add yourself' });
         try {
+            // Check existing relationship in either direction
+            const existing = await pool.query(
+                `SELECT user_id, friend_id, status FROM friends
+                 WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)`,
+                [userId, friendId]
+            );
+            if (existing.rows.some(r => r.status === 'accepted')) {
+                return reply.code(400).send({ error: 'Already friends' });
+            }
+            // Check if they already sent us a pending request -> auto-accept
+            const incomingPending = existing.rows.find(
+                r => r.user_id === friendId && r.friend_id === userId && r.status === 'pending'
+            );
+            if (incomingPending) {
+                await pool.query(
+                    `UPDATE friends SET status = 'accepted' WHERE user_id = $1 AND friend_id = $2`,
+                    [friendId, userId]
+                );
+                await pool.query(
+                    `INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
+                    [userId, friendId]
+                );
+                return { success: true, status: 'accepted' };
+            }
+            // Check if we already sent a pending request
+            const alreadySent = existing.rows.find(
+                r => r.user_id === userId && r.friend_id === friendId && r.status === 'pending'
+            );
+            if (alreadySent) {
+                return reply.code(400).send({ error: 'Request already sent' });
+            }
+            // Create new pending request
             await pool.query(
-                'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                `INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'pending') ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'pending'`,
+                [userId, friendId]
+            );
+            return { success: true, status: 'pending' };
+        } catch (e) {
+            fastify.log.error('Add friend error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Accept an incoming friend request
+    fastify.post('/api/friends/accept', async (req, reply) => {
+        const { userId, requesterId } = req.body;
+        if (!userId || !requesterId) return reply.code(400).send({ error: 'Missing params' });
+        try {
+            const pending = await pool.query(
+                `SELECT 1 FROM friends WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+                [requesterId, userId]
+            );
+            if (pending.rows.length === 0) {
+                return reply.code(404).send({ error: 'No pending request found' });
+            }
+            await pool.query(
+                `UPDATE friends SET status = 'accepted', added_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND friend_id = $2`,
+                [requesterId, userId]
+            );
+            await pool.query(
+                `INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
+                [userId, requesterId]
+            );
+            return { success: true };
+        } catch (e) {
+            fastify.log.error('Accept friend error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Decline an incoming friend request
+    fastify.post('/api/friends/decline', async (req, reply) => {
+        const { userId, requesterId } = req.body;
+        if (!userId || !requesterId) return reply.code(400).send({ error: 'Missing params' });
+        try {
+            await pool.query(
+                `DELETE FROM friends WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+                [requesterId, userId]
+            );
+            return { success: true };
+        } catch (e) {
+            fastify.log.error('Decline friend error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Cancel a pending friend request I sent
+    fastify.post('/api/friends/cancel', async (req, reply) => {
+        const { userId, friendId } = req.body;
+        if (!userId || !friendId) return reply.code(400).send({ error: 'Missing params' });
+        try {
+            await pool.query(
+                `DELETE FROM friends WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
                 [userId, friendId]
             );
             return { success: true };
         } catch (e) {
-            fastify.log.error('Add friend error: ' + e.message);
-            return reply.code(500).send({ error: 'Database error', detail: e.message });
+            fastify.log.error('Cancel friend error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
         }
     });
 
-    // Remove friend
+    // Remove friend (deletes both reciprocal rows)
     fastify.post('/api/friends/remove', async (req, reply) => {
         const { userId, friendId } = req.body;
         if (!userId || !friendId) return reply.code(400).send({ error: 'Missing userId or friendId' });
         try {
-            await pool.query('DELETE FROM friends WHERE user_id = $1 AND friend_id = $2', [userId, friendId]);
+            await pool.query(
+                `DELETE FROM friends WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)`,
+                [userId, friendId]
+            );
             return { success: true };
         } catch (e) {
             fastify.log.error('Remove friend error: ' + e.message);
@@ -583,20 +693,41 @@ fastify.register(async function (fastify) {
         }
     });
 
-    // List friends
+    // List friends, incoming requests, and outgoing requests
     fastify.get('/api/friends/:userId', async (req, reply) => {
         const { userId } = req.params;
         try {
-            const res = await pool.query(`
+            // Accepted friends
+            const friendsRes = await pool.query(`
                 SELECT u.user_id, u.username, u.friend_code,
                        pp.cash, pp.stars, pp.prestige_level, pp.total_walls_painted, pp.total_cash_earned
                 FROM friends f
                 JOIN users u ON u.user_id = f.friend_id
                 LEFT JOIN player_progress pp ON pp.user_id = f.friend_id
-                WHERE f.user_id = $1
+                WHERE f.user_id = $1 AND f.status = 'accepted'
                 ORDER BY f.added_at DESC
             `, [userId]);
-            return { friends: res.rows };
+            // Incoming pending requests (someone sent request to me)
+            const incomingRes = await pool.query(`
+                SELECT u.user_id, u.username, u.friend_code, f.added_at
+                FROM friends f
+                JOIN users u ON u.user_id = f.user_id
+                WHERE f.friend_id = $1 AND f.status = 'pending'
+                ORDER BY f.added_at DESC
+            `, [userId]);
+            // Outgoing pending requests (I sent request to someone)
+            const outgoingRes = await pool.query(`
+                SELECT u.user_id, u.username, u.friend_code, f.added_at
+                FROM friends f
+                JOIN users u ON u.user_id = f.friend_id
+                WHERE f.user_id = $1 AND f.status = 'pending'
+                ORDER BY f.added_at DESC
+            `, [userId]);
+            return {
+                friends: friendsRes.rows,
+                incoming: incomingRes.rows,
+                outgoing: outgoingRes.rows,
+            };
         } catch (e) {
             fastify.log.error('List friends error: ' + e.message);
             return reply.code(500).send({ error: 'Database error' });

@@ -40,6 +40,11 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
     final audioService = Provider.of<AudioService>(context, listen: false);
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       gameService.updateLastOnline();
+      // Sync progress to server so friends can see real stats
+      final userService = Provider.of<UserService>(context, listen: false);
+      if (userService.userId != null) {
+        gameService.syncProgressToServer(userService.baseUrl, userService.userId!);
+      }
       audioService.pauseBgm();
     }
     if (state == AppLifecycleState.resumed) {

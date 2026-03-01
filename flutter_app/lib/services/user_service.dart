@@ -193,27 +193,72 @@ class UserService extends ChangeNotifier {
     }
   }
 
-  /// Add a friend by their userId.
-  Future<bool> addFriend(String friendId) async {
+  /// Send a friend request. Returns response map with 'status' ('pending' or 'accepted') or 'error'.
+  Future<Map<String, dynamic>?> sendFriendRequest(String friendId) async {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/add'),
-        headers: authHeaders,
+        headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': _userId, 'friendId': friendId}),
+      );
+      return json.decode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Send friend request error: $e');
+      return null;
+    }
+  }
+
+  /// Accept an incoming friend request.
+  Future<bool> acceptFriendRequest(String requesterId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/friends/accept'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': _userId, 'requesterId': requesterId}),
       );
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('Add friend error: $e');
+      debugPrint('Accept friend request error: $e');
       return false;
     }
   }
 
-  /// Remove a friend.
+  /// Decline an incoming friend request.
+  Future<bool> declineFriendRequest(String requesterId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/friends/decline'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': _userId, 'requesterId': requesterId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Decline friend request error: $e');
+      return false;
+    }
+  }
+
+  /// Cancel a pending friend request I sent.
+  Future<bool> cancelFriendRequest(String friendId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/friends/cancel'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': _userId, 'friendId': friendId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Cancel friend request error: $e');
+      return false;
+    }
+  }
+
+  /// Remove a friend (unfriend).
   Future<bool> removeFriend(String friendId) async {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/remove'),
-        headers: authHeaders,
+        headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': _userId, 'friendId': friendId}),
       );
       return response.statusCode == 200;
@@ -223,21 +268,20 @@ class UserService extends ChangeNotifier {
     }
   }
 
-  /// List friends with basic stats.
-  Future<List<Map<String, dynamic>>> listFriends() async {
+  /// List friends, incoming requests, and outgoing requests.
+  Future<Map<String, dynamic>> listFriends() async {
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/api/friends/$_userId'),
         headers: {'Content-Type': 'application/json'},
       );
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data['friends'] ?? []);
+        return json.decode(response.body) as Map<String, dynamic>;
       }
-      return [];
+      return {'friends': [], 'incoming': [], 'outgoing': []};
     } catch (e) {
       debugPrint('List friends error: $e');
-      return [];
+      return {'friends': [], 'incoming': [], 'outgoing': []};
     }
   }
 
