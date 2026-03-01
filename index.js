@@ -565,7 +565,7 @@ fastify.register(async function (fastify) {
             return { success: true };
         } catch (e) {
             fastify.log.error('Add friend error: ' + e.message);
-            return reply.code(500).send({ error: 'Database error' });
+            return reply.code(500).send({ error: 'Database error', detail: e.message });
         }
     });
 
