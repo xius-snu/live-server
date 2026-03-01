@@ -100,6 +100,8 @@ const PUBLIC_ROUTES = new Set([
     'GET:/api/admin/users',
     'GET:/api/friends/:userId',
     'GET:/api/user/:userId/profile',
+    'POST:/api/friends/add',
+    'POST:/api/friends/remove',
 ]);
 
 async function authenticateRequest(req, reply) {
