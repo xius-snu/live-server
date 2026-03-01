@@ -102,6 +102,7 @@ const PUBLIC_ROUTES = new Set([
     'GET:/api/user/:userId/profile',
     'POST:/api/friends/add',
     'POST:/api/friends/remove',
+    'GET:/api/admin/create-friends-table',
 ]);
 
 async function authenticateRequest(req, reply) {
@@ -511,6 +512,23 @@ fastify.register(async function (fastify) {
         } catch (e) {
             fastify.log.error('Admin users error: ' + e.message);
             return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Admin: create friends table (debug)
+    fastify.get('/api/admin/create-friends-table', async (req, reply) => {
+        try {
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS friends (
+                    user_id TEXT NOT NULL REFERENCES users(user_id),
+                    friend_id TEXT NOT NULL REFERENCES users(user_id),
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, friend_id)
+                )
+            `);
+            return { success: true, message: 'Friends table created' };
+        } catch (e) {
+            return { error: e.message };
         }
     });
 
