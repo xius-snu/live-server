@@ -46,7 +46,23 @@ class UserService extends ChangeNotifier {
       await _fetchUsernameFromServer();
     }
 
+    // Sync friend code to server on every launch
+    if (_userId != null && _friendCode != null) {
+      _syncFriendCode();
+    }
+
     notifyListeners();
+  }
+
+  /// Fire-and-forget: push local friend code to the server.
+  Future<void> _syncFriendCode() async {
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/api/user/sync-friend-code'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': _userId, 'friendCode': _friendCode}),
+      );
+    } catch (_) {}
   }
 
   Future<void> _generateFriendCode() async {

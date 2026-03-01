@@ -96,6 +96,7 @@ const PUBLIC_ROUTES = new Set([
     'GET:/api/leaderboard/current',
     'POST:/api/user', // registration handled separately with its own token logic
     'GET:/api/user/by-code/:code',
+    'POST:/api/user/sync-friend-code',
     'GET:/api/admin/users',
     'GET:/api/friends/:userId',
     'GET:/api/user/:userId/profile',
@@ -458,6 +459,22 @@ fastify.register(async function (fastify) {
         } catch (e) {
             fastify.log.error('DB Get Error: ' + e.message);
             return { username: null };
+        }
+    });
+
+    // Sync friend code (fire-and-forget from client on launch)
+    fastify.post('/api/user/sync-friend-code', async (req, reply) => {
+        const { userId, friendCode } = req.body;
+        if (!userId || !friendCode) return reply.code(400).send({ error: 'Missing fields' });
+        try {
+            await pool.query(
+                'UPDATE users SET friend_code = COALESCE(friend_code, $2) WHERE user_id = $1',
+                [userId, friendCode.toUpperCase()]
+            );
+            return { success: true };
+        } catch (e) {
+            fastify.log.error('Sync friend code error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
         }
     });
 
