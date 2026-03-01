@@ -468,7 +468,7 @@ fastify.register(async function (fastify) {
         if (!userId || !friendCode) return reply.code(400).send({ error: 'Missing fields' });
         try {
             await pool.query(
-                'UPDATE users SET friend_code = COALESCE(friend_code, $2) WHERE user_id = $1',
+                'UPDATE users SET friend_code = $2 WHERE user_id = $1',
                 [userId, friendCode.toUpperCase()]
             );
             return { success: true };

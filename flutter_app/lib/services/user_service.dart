@@ -54,15 +54,18 @@ class UserService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fire-and-forget: push local friend code to the server.
+  /// Push local friend code to the server.
   Future<void> _syncFriendCode() async {
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse('$_baseUrl/api/user/sync-friend-code'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': _userId, 'friendCode': _friendCode}),
       );
-    } catch (_) {}
+      debugPrint('Sync friend code response: ${response.statusCode} ${response.body}');
+    } catch (e) {
+      debugPrint('Sync friend code error: $e');
+    }
   }
 
   Future<void> _generateFriendCode() async {
@@ -155,6 +158,10 @@ class UserService extends ChangeNotifier {
         }
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('username', _username!);
+        // Sync friend code now that user exists in DB
+        if (_friendCode != null) {
+          await _syncFriendCode();
+        }
         notifyListeners();
         return true;
       }
