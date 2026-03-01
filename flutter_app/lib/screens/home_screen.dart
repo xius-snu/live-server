@@ -7,7 +7,8 @@ import '../game/paint_roller_game.dart';
 import '../services/game_service.dart';
 import '../services/audio_service.dart';
 import '../services/leaderboard_service.dart';
-import '../models/house.dart';
+import '../theme/app_colors.dart';
+import '../utils/format_utils.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -248,7 +249,6 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Consumer<GameService>(
       builder: (context, gameService, _) {
-        final house = gameService.currentHouseDef;
         final roundState = _game.isMounted ? _game.roundState : null;
 
         return LayoutBuilder(builder: (context, constraints) {
@@ -276,23 +276,11 @@ class _HomeScreenState extends State<HomeScreen>
                 gameService.visualHouseDef.displayName(gameService.visualCycleLevel).toUpperCase(),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Color(0xFF2A2A2A),
+                  color: AppColors.darkText,
                   fontWeight: FontWeight.w900,
                   fontSize: 20,
                   letterSpacing: 1.5,
                 ),
-              ),
-            ),
-
-            // Cat sleeping on top-right corner of wall border (slides with wall)
-            Positioned(
-              top: wallRect.top - 22,
-              left: gameWallRight - 100 + _slideFraction * gameSize.width,
-              child: Image.asset(
-                'assets/images/home/cat.png',
-                width: 100,
-                height: 75,
-                fit: BoxFit.contain,
               ),
             ),
 
@@ -306,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen>
                   child: Text(
                     '${roundState.maxStrokes - roundState.strokesRemaining}/${roundState.maxStrokes}',
                     style: const TextStyle(
-                      color: Color(0xFF2A2A2A),
+                      color: AppColors.darkText,
                       fontWeight: FontWeight.w800,
                       fontSize: 26,
                     ),
@@ -322,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen>
                 right: 16,
                 child: _PulsingText(
                   text: 'TAP TO PAINT',
-                  color: const Color(0xFF2A2A2A),
+                  color: AppColors.darkText,
                 ),
               ),
 
@@ -342,15 +330,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  static String _formatWithCommas(double value) {
-    final whole = value.toStringAsFixed(0);
-    final buf = StringBuffer();
-    for (int i = 0; i < whole.length; i++) {
-      if (i > 0 && (whole.length - i) % 3 == 0) buf.write(',');
-      buf.write(whole[i]);
-    }
-    return buf.toString();
-  }
 
   Widget _buildPayoutAnimation() {
     final coverage = _lastCoveragePercent / 100.0;
@@ -390,13 +369,13 @@ class _HomeScreenState extends State<HomeScreen>
           child: Builder(builder: (_) {
             final hasBonus = bonusLabel != null;
             final bonusColor = bonus >= 3.0
-                ? const Color(0xFFE53935) // red
+                ? AppColors.bonusPerfect
                 : bonus >= 2.0
-                    ? const Color(0xFFF5C842) // gold
-                    : const Color(0xFFB0BEC5); // silver
+                    ? AppColors.bonusGreat
+                    : AppColors.bonusNice;
             final bonusTextColor = bonus >= 3.0
                 ? Colors.white
-                : const Color(0xFF2A2A2A);
+                : AppColors.darkText;
             const radius = Radius.circular(22);
             const noRadius = Radius.zero;
 
@@ -452,9 +431,9 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '+${_formatWithCommas(_lastPayout + _lastStreakBonus)}',
+                          '+${fmtCommas(_lastPayout + _lastStreakBonus)}',
                           style: const TextStyle(
-                            color: Color(0xFFFFC843),
+                            color: AppColors.payoutGold,
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
@@ -547,15 +526,7 @@ class _ConfettiOverlayState extends State<_ConfettiOverlay>
   late List<_ConfettiParticle> _particles;
   final _rng = Random();
 
-  static const _colors = [
-    Color(0xFFE94560),
-    Color(0xFF4ADE80),
-    Color(0xFFF5C842),
-    Color(0xFF3B82F6),
-    Color(0xFFA855F7),
-    Color(0xFFFF6B6B),
-    Color(0xFF38BDF8),
-  ];
+  static const _colors = AppColors.confetti;
 
   @override
   void initState() {

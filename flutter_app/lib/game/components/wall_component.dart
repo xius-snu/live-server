@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../config/game_config.dart';
 import '../wall_pattern.dart';
 
 /// Bright, cartoonish wall with procedural dirt spots and
@@ -50,15 +51,14 @@ class WallComponent extends PositionComponent {
 
   void _generateDirtBlobs() {
     // Fewer blobs for higher-tier houses. Keep them large and soft.
-    final count = max(3, 12 - houseTier * 2);
-    const margin = 12.0;
+    final count = max(kDirtBlobMinCount, kDirtBlobBaseCount - houseTier * kDirtBlobReductionPerTier);
     _dirtBlobs = List.generate(count, (_) {
-      final radius = 8.0 + _rng.nextDouble() * 18.0;
+      final radius = kDirtBlobMinRadius + _rng.nextDouble() * kDirtBlobRadiusVariance;
       return _DirtBlob(
-        x: margin + _rng.nextDouble() * (size.x - margin * 2),
-        y: margin + _rng.nextDouble() * (size.y - margin * 2),
+        x: kDirtBlobMargin + _rng.nextDouble() * (size.x - kDirtBlobMargin * 2),
+        y: kDirtBlobMargin + _rng.nextDouble() * (size.y - kDirtBlobMargin * 2),
         radius: radius,
-        opacity: 0.06 + _rng.nextDouble() * 0.10,
+        opacity: kDirtBlobMinOpacity + _rng.nextDouble() * kDirtBlobOpacityVariance,
       );
     });
   }
@@ -83,7 +83,7 @@ class WallComponent extends PositionComponent {
     double scale = 1.0;
     List<_PatternPlacement> placed = [];
 
-    for (int attempt = 0; attempt < 6; attempt++) {
+    for (int attempt = 0; attempt < kPatternMaxRetries; attempt++) {
       placed = _tryPlaceShapes(
         targetCount: targetCount,
         patternDef: patternDef,
@@ -94,8 +94,7 @@ class WallComponent extends PositionComponent {
         usableH: usableH,
       );
       if (placed.length >= targetCount) break;
-      // Shrink by 15% each attempt
-      scale *= 0.85;
+      scale *= kPatternShrinkFactor;
     }
 
     _patternShapes = placed;
@@ -152,24 +151,23 @@ class WallComponent extends PositionComponent {
       final cr = sizeOpt.cornerRadius * scale;
 
       final isDiamond = patternDef.shape == PatternShape.diamond;
-      final bboxW = isDiamond ? w * 0.707 + h * 0.707 : w;
-      final bboxH = isDiamond ? w * 0.707 + h * 0.707 : h;
+      final bboxW = isDiamond ? w * kPatternDiamondBboxFactor + h * kPatternDiamondBboxFactor : w;
+      final bboxH = isDiamond ? w * kPatternDiamondBboxFactor + h * kPatternDiamondBboxFactor : h;
 
       // Cell center + jitter
       final cellCx = margin + (col + 0.5) * cellW;
       final cellCy = margin + (row + 0.5) * cellH;
-      final jitterX = ((placementRng.nextDouble() - 0.5) * cellW * 0.8);
-      final jitterY = ((placementRng.nextDouble() - 0.5) * cellH * 0.8);
+      final jitterX = ((placementRng.nextDouble() - 0.5) * cellW * kPatternJitterFactor);
+      final jitterY = ((placementRng.nextDouble() - 0.5) * cellH * kPatternJitterFactor);
 
       final cx = (cellCx + jitterX).clamp(margin + bboxW / 2, size.x - margin - bboxW / 2);
       final cy = (cellCy + jitterY).clamp(margin + bboxH / 2, size.y - margin - bboxH / 2);
 
       // Reject overlaps
-      const gap = 4.0;
       var overlaps = false;
       for (final existing in placed) {
-        if ((cx - existing.cx).abs() < (bboxW + existing.bboxW) / 2 + gap &&
-            (cy - existing.cy).abs() < (bboxH + existing.bboxH) / 2 + gap) {
+        if ((cx - existing.cx).abs() < (bboxW + existing.bboxW) / 2 + kPatternOverlapGap &&
+            (cy - existing.cy).abs() < (bboxH + existing.bboxH) / 2 + kPatternOverlapGap) {
           overlaps = true;
           break;
         }
@@ -205,7 +203,7 @@ class WallComponent extends PositionComponent {
     final patternDef = WallPatternDef.forHouseIndex(houseTier);
 
     // Semi-transparent black fill — darkens both wall and paint underneath
-    final fillPaint = Paint()..color = Colors.black.withOpacity(0.12);
+    final fillPaint = Paint()..color = Colors.black.withOpacity(kPatternFillOpacity);
     final strokePaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
@@ -298,11 +296,11 @@ class WallComponent extends PositionComponent {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Colors.white.withOpacity(0.06),
+          Colors.white.withOpacity(kWallGradientTopOpacity),
           Colors.transparent,
-          Colors.black.withOpacity(0.04),
+          Colors.black.withOpacity(kWallGradientBottomOpacity),
         ],
-        stops: const [0.0, 0.4, 1.0],
+        stops: kWallGradientStops,
       ).createShader(wallRect);
     canvas.drawRect(wallRect, gradientPaint);
 
@@ -310,7 +308,7 @@ class WallComponent extends PositionComponent {
     for (final blob in _dirtBlobs) {
       final blobPaint = Paint()
         ..color = dirtColor.withOpacity(blob.opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0);
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, kDirtBlobBlurRadius);
       canvas.drawCircle(
         Offset(blob.x, blob.y),
         blob.radius,
@@ -324,10 +322,10 @@ class WallComponent extends PositionComponent {
     // === 5. Gentle top-left light highlight ===
     final lightPaint = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(-0.6, -0.5),
-        radius: 1.3,
+        center: Alignment(kWallLightCenterX, kWallLightCenterY),
+        radius: kWallLightRadius,
         colors: [
-          Colors.white.withOpacity(0.08),
+          Colors.white.withOpacity(kWallLightOpacity),
           Colors.transparent,
         ],
       ).createShader(wallRect);

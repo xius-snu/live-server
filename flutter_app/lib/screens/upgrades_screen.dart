@@ -3,24 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/game_service.dart';
 import '../models/house.dart';
+import '../theme/app_colors.dart';
+import '../utils/format_utils.dart';
 
 class UpgradesScreen extends StatelessWidget {
   const UpgradesScreen({super.key});
 
-  static String _formatWithCommas(double value) {
-    final whole = value.toStringAsFixed(0);
-    final buf = StringBuffer();
-    for (int i = 0; i < whole.length; i++) {
-      if (i > 0 && (whole.length - i) % 3 == 0) buf.write(',');
-      buf.write(whole[i]);
-    }
-    return buf.toString();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8D5B8),
+      backgroundColor: AppColors.background,
       body: Consumer<GameService>(
         builder: (context, gameService, _) {
           return CustomScrollView(
@@ -39,7 +32,7 @@ class UpgradesScreen extends StatelessWidget {
                             const Text(
                               'Upgrades',
                               style: TextStyle(
-                                color: Color(0xFF6B5038),
+                                color: AppColors.brownDark,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -49,9 +42,9 @@ class UpgradesScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF2A2A2A),
+                                color: AppColors.hudDark,
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFF111111), width: 1.5),
+                                border: Border.all(color: AppColors.hudBorder, width: 1.5),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -63,9 +56,9 @@ class UpgradesScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
-                                    _formatWithCommas(gameService.cash),
+                                    fmtCommas(gameService.cash),
                                     style: const TextStyle(
-                                      color: Color(0xFFF5C842),
+                                      color: AppColors.gold,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 14,
                                     ),
@@ -78,9 +71,9 @@ class UpgradesScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF2A2A2A),
+                                color: AppColors.hudDark,
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFF111111), width: 1.5),
+                                border: Border.all(color: AppColors.hudBorder, width: 1.5),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -92,9 +85,9 @@ class UpgradesScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
-                                    _formatWithCommas(gameService.gems.toDouble()),
+                                    fmtCommas(gameService.gems.toDouble()),
                                     style: const TextStyle(
-                                      color: Color(0xFFDA70D6),
+                                      color: AppColors.gem,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 14,
                                     ),
@@ -176,7 +169,7 @@ class _ProgressionCards extends StatelessWidget {
               HapticFeedback.heavyImpact();
               gameService.upgradeHouse();
             },
-            accentColor: const Color(0xFFF5C842),
+            accentColor: AppColors.gold,
           ),
           const SizedBox(height: 12),
           // Roller Level card
@@ -196,7 +189,7 @@ class _ProgressionCards extends StatelessWidget {
               HapticFeedback.heavyImpact();
               gameService.upgradeRoller();
             },
-            accentColor: const Color(0xFF3B82F6),
+            accentColor: AppColors.upgradeRoller,
           ),
         ],
       ),
@@ -242,7 +235,7 @@ class _ProgressionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF5A4230),
+        color: AppColors.progressionBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accentColor.withOpacity(0.35)),
       ),

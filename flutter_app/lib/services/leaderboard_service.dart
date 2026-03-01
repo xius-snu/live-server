@@ -101,7 +101,7 @@ class LeaderboardService extends ChangeNotifier {
     if (_userId == null) return;
     try {
       final uri = Uri.parse('$_baseUrl/api/leaderboard/status?userId=$_userId');
-      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+      final res = await http.get(uri, headers: _userService.authHeaders).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         _joined = data['joined'] == true;
@@ -127,7 +127,7 @@ class LeaderboardService extends ChangeNotifier {
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/api/leaderboard/join'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _userService.authHeaders,
         body: json.encode({'userId': _userId}),
       ).timeout(const Duration(seconds: 15));
       if (res.statusCode == 200) {
@@ -204,7 +204,7 @@ class LeaderboardService extends ChangeNotifier {
     http
         .post(
           Uri.parse('$_baseUrl/api/leaderboard/submit'),
-          headers: {'Content-Type': 'application/json'},
+          headers: _userService.authHeaders,
           body: json.encode({
             'userId': _userId,
             'coverage': coverage,

@@ -10,6 +10,8 @@ import '../services/game_service.dart';
 import 'minigame_speed_paint.dart';
 import 'minigame_bullseye.dart';
 import 'minigame_color_match.dart';
+import '../theme/app_colors.dart';
+import '../utils/format_utils.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key});
@@ -50,7 +52,7 @@ class _SocialScreenState extends State<SocialScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8D5B8),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -61,7 +63,7 @@ class _SocialScreenState extends State<SocialScreen>
                   const Text(
                     'Social',
                     style: TextStyle(
-                      color: Color(0xFF6B5038),
+                      color: AppColors.brownDark,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
@@ -73,13 +75,13 @@ class _SocialScreenState extends State<SocialScreen>
                         _HudChip(
                           icon: 'assets/images/UI/coin250.png',
                           value: _fmt(gs.cash),
-                          color: const Color(0xFFF5C842),
+                          color: AppColors.gold,
                         ),
                         const SizedBox(width: 6),
                         _HudChip(
                           icon: 'assets/images/UI/diamond250.png',
                           value: '${gs.gems}',
-                          color: const Color(0xFFDA70D6),
+                          color: AppColors.gem,
                         ),
                       ],
                     ),
@@ -94,13 +96,13 @@ class _SocialScreenState extends State<SocialScreen>
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6B5038),
+                  color: AppColors.brownDark,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   indicator: BoxDecoration(
-                    color: const Color(0xFFFF6B6B),
+                    color: AppColors.navSocial,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   labelColor: Colors.white,
@@ -160,9 +162,9 @@ class _HudChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
+        color: AppColors.hudDark,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFF111111), width: 1.5),
+        border: Border.all(color: AppColors.hudBorder, width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -220,12 +222,12 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(0xFF3B82F6).withOpacity(0.15),
-                      const Color(0xFFF5C842).withOpacity(0.15),
+                      AppColors.upgradeRoller.withOpacity(0.15),
+                      AppColors.gold.withOpacity(0.15),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2)),
+                  border: Border.all(color: AppColors.upgradeRoller.withOpacity(0.2)),
                 ),
                 child: Column(
                   children: [
@@ -234,7 +236,7 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                     const Text(
                       "PAINTER'S CUP",
                       style: TextStyle(
-                        color: Color(0xFF6B5038),
+                        color: AppColors.brownDark,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1,
@@ -244,7 +246,7 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                       const SizedBox(height: 4),
                       Text(
                         weekDates,
-                        style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 12),
+                        style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 12),
                       ),
                     ],
                     if (lb.endsAt != null) ...[
@@ -267,19 +269,19 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE8734A).withOpacity(0.12),
+                            color: AppColors.primary.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE8734A).withOpacity(0.25)),
+                            border: Border.all(color: AppColors.primary.withOpacity(0.25)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.timer_outlined, size: 14, color: const Color(0xFFE8734A).withOpacity(0.8)),
+                              Icon(Icons.timer_outlined, size: 14, color: AppColors.primary.withOpacity(0.8)),
                               const SizedBox(width: 5),
                               Text(
                                 'Resets in $timeStr',
                                 style: TextStyle(
-                                  color: const Color(0xFFE8734A).withOpacity(0.9),
+                                  color: AppColors.primary.withOpacity(0.9),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -304,7 +306,7 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF5C842),
+                            backgroundColor: AppColors.gold,
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -318,13 +320,13 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF4ADE80).withOpacity(0.12),
+                          color: AppColors.secondary.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF4ADE80).withOpacity(0.3)),
+                          border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
                         ),
                         child: const Center(
                           child: Text('\u2705  PARTICIPATING',
-                              style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w700, fontSize: 13)),
+                              style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.w700, fontSize: 13)),
                         ),
                       ),
                   ],
@@ -343,14 +345,14 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         margin: EdgeInsets.only(left: i == 0 ? 0 : 4, right: i == 2 ? 0 : 4),
                         decoration: BoxDecoration(
-                          color: sel ? const Color(0xFF3B82F6) : const Color(0xFF6B5038).withOpacity(0.15),
+                          color: sel ? AppColors.upgradeRoller : AppColors.brownDark.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
                           child: Text(
                             _catLabels[i],
                             style: TextStyle(
-                              color: sel ? Colors.white : const Color(0xFF6B5038).withOpacity(0.6),
+                              color: sel ? Colors.white : AppColors.brownDark.withOpacity(0.6),
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),
@@ -367,14 +369,14 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
               if (lb.loading && board.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 30),
-                  child: CircularProgressIndicator(color: Color(0xFF3B82F6), strokeWidth: 2),
+                  child: CircularProgressIndicator(color: AppColors.upgradeRoller, strokeWidth: 2),
                 )
               else if (board.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 30),
                   child: Text(
                     lb.joined ? 'No entries yet. Paint some walls!' : 'Join to see the leaderboard',
-                    style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 13),
+                    style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 13),
                   ),
                 )
               else
@@ -408,7 +410,7 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Text('\u2022 \u2022 \u2022',
-                            style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.3))),
+                            style: TextStyle(color: AppColors.brownDark.withOpacity(0.3))),
                       ),
                       _RankRow(rank: rank, username: 'You', value: _formatValue(val, _selectedCat), isMe: true, tab: _selectedCat),
                     ],
@@ -437,19 +439,10 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
 
   static String _formatValue(double value, int tab) {
     if (tab == 0) return '${(value * 100).toStringAsFixed(1)}%';
-    if (tab == 1) return _fmtCommas(value);
+    if (tab == 1) return fmtCommas(value);
     return value.toInt().toString();
   }
 
-  static String _fmtCommas(double v) {
-    final s = v.toStringAsFixed(0);
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
-      buf.write(s[i]);
-    }
-    return buf.toString();
-  }
 }
 
 class _RankRow extends StatelessWidget {
@@ -470,23 +463,23 @@ class _RankRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isMe
-              ? const Color(0xFF3B82F6).withOpacity(0.15)
+              ? AppColors.upgradeRoller.withOpacity(0.15)
               : rank == 1
-                  ? const Color(0xFFF5C842).withOpacity(0.08)
-                  : const Color(0xFF6B5038).withOpacity(0.06),
+                  ? AppColors.gold.withOpacity(0.08)
+                  : AppColors.brownDark.withOpacity(0.06),
           borderRadius: BorderRadius.circular(8),
-          border: isMe ? Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)) : null,
+          border: isMe ? Border.all(color: AppColors.upgradeRoller.withOpacity(0.3)) : null,
         ),
         child: Row(
           children: [
-            SizedBox(width: 30, child: Text(rankDisplay, style: TextStyle(fontSize: rank <= 3 ? 16 : 13, color: const Color(0xFF6B5038).withOpacity(0.7), fontWeight: FontWeight.w600))),
+            SizedBox(width: 30, child: Text(rankDisplay, style: TextStyle(fontSize: rank <= 3 ? 16 : 13, color: AppColors.brownDark.withOpacity(0.7), fontWeight: FontWeight.w600))),
             const SizedBox(width: 6),
-            Expanded(child: Text(username, style: TextStyle(color: isMe ? const Color(0xFF3B82F6) : const Color(0xFF6B5038), fontSize: 13, fontWeight: isMe ? FontWeight.w700 : FontWeight.w500), overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(username, style: TextStyle(color: isMe ? AppColors.upgradeRoller : AppColors.brownDark, fontSize: 13, fontWeight: isMe ? FontWeight.w700 : FontWeight.w500), overflow: TextOverflow.ellipsis)),
             if (tab == 1) ...[
               Image.asset('assets/images/UI/coin250.png', width: 14, height: 14),
               const SizedBox(width: 4),
             ],
-            Text(value, style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(value, style: TextStyle(color: AppColors.brownDark.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -549,7 +542,7 @@ class _LiveEventCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFA855F7), Color(0xFFE8734A)],
+          colors: [AppColors.purpleAccent, AppColors.primary],
         ),
         borderRadius: BorderRadius.circular(18),
       ),
@@ -593,7 +586,7 @@ class _LiveEventCard extends StatelessWidget {
               onPressed: attemptsLeft > 0 ? () => _attemptEvent(context, event) : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFFE8734A),
+                foregroundColor: AppColors.primary,
                 disabledBackgroundColor: Colors.white.withOpacity(0.3),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -631,7 +624,7 @@ class _LiveEventCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF6B5038),
+        backgroundColor: AppColors.brownDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Item Drop!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
         content: Column(
@@ -669,10 +662,10 @@ class _LiveEventCard extends StatelessWidget {
   static Color _rarityColor(String r) {
     switch (r) {
       case 'common': return Colors.grey;
-      case 'uncommon': return const Color(0xFF4ADE80);
-      case 'rare': return const Color(0xFF3B82F6);
-      case 'epic': return const Color(0xFFA855F7);
-      case 'legendary': return const Color(0xFFF59E0B);
+      case 'uncommon': return AppColors.rarityUncommon;
+      case 'rare': return AppColors.rarityRare;
+      case 'epic': return AppColors.rarityEpic;
+      case 'legendary': return AppColors.rarityLegendary;
       default: return Colors.grey;
     }
   }
@@ -713,13 +706,13 @@ class _NoEventsCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF6B5038).withOpacity(0.12), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: AppColors.brownDark.withOpacity(0.12), borderRadius: BorderRadius.circular(16)),
       child: Column(children: [
         const Text('\u{23F3}', style: TextStyle(fontSize: 40)),
         const SizedBox(height: 10),
-        const Text('No Live Events', style: TextStyle(color: Color(0xFF6B5038), fontSize: 16, fontWeight: FontWeight.w700)),
+        const Text('No Live Events', style: TextStyle(color: AppColors.brownDark, fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text('Check back soon!', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 12)),
+        Text('Check back soon!', style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 12)),
       ]),
     );
   }
@@ -736,10 +729,10 @@ class _CommunityGoalCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [const Color(0xFF4ADE80).withOpacity(0.1), const Color(0xFF3B82F6).withOpacity(0.1)],
+          colors: [AppColors.secondary.withOpacity(0.1), AppColors.upgradeRoller.withOpacity(0.1)],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF4ADE80).withOpacity(0.2)),
+        border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -747,10 +740,10 @@ class _CommunityGoalCard extends StatelessWidget {
           Row(children: [
             const Text('\u{1F30D}', style: TextStyle(fontSize: 20)),
             const SizedBox(width: 8),
-            const Text('COMMUNITY GOAL', style: TextStyle(color: Color(0xFF4ADE80), fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1)),
+            const Text('COMMUNITY GOAL', style: TextStyle(color: AppColors.secondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1)),
           ]),
           const SizedBox(height: 10),
-          const Text('Paint 1,000,000 walls this week!', style: TextStyle(color: Color(0xFF6B5038), fontSize: 14, fontWeight: FontWeight.w600)),
+          const Text('Paint 1,000,000 walls this week!', style: TextStyle(color: AppColors.brownDark, fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           // Progress bar
           ClipRRect(
@@ -758,16 +751,16 @@ class _CommunityGoalCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: 0.42,
               minHeight: 10,
-              backgroundColor: const Color(0xFF6B5038).withOpacity(0.1),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF4ADE80)),
+              backgroundColor: AppColors.brownDark.withOpacity(0.1),
+              valueColor: const AlwaysStoppedAnimation(AppColors.secondary),
             ),
           ),
           const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('420,000 / 1,000,000', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 11)),
-              Text('Reward: \u{1F48E}5 Gems', style: TextStyle(color: const Color(0xFFA855F7).withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w600)),
+              Text('420,000 / 1,000,000', style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 11)),
+              Text('Reward: \u{1F48E}5 Gems', style: TextStyle(color: AppColors.purpleAccent.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -821,27 +814,27 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [const Color(0xFFF5C842).withOpacity(0.12), const Color(0xFFE8734A).withOpacity(0.12)]),
+        gradient: LinearGradient(colors: [AppColors.gold.withOpacity(0.12), AppColors.primary.withOpacity(0.12)]),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF5C842).withOpacity(0.25)),
+        border: Border.all(color: AppColors.gold.withOpacity(0.25)),
       ),
       child: Column(
         children: [
           Text(_spinning ? '\u{1F3B0}' : (_result != null ? _result!.split(' ').first : '\u{1F3B2}'), style: const TextStyle(fontSize: 40)),
           const SizedBox(height: 8),
           if (_result != null && !_spinning)
-            Text(_result!, style: const TextStyle(color: Color(0xFFF5C842), fontWeight: FontWeight.w700, fontSize: 16))
+            Text(_result!, style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700, fontSize: 16))
           else if (_spinning)
-            const Text('Spinning...', style: TextStyle(color: Color(0xFFE8734A), fontWeight: FontWeight.w600, fontSize: 13))
+            const Text('Spinning...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13))
           else
-            Text('Spin for a free daily reward!', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6), fontSize: 12)),
+            Text('Spin for a free daily reward!', style: TextStyle(color: AppColors.brownDark.withOpacity(0.6), fontSize: 12)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 6, runSpacing: 3, alignment: WrapAlignment.center,
             children: _prizes.map((p) => Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFF6B5038).withOpacity(0.06), borderRadius: BorderRadius.circular(5)),
-              child: Text('${p.$1} ${(p.$3 * 100).toStringAsFixed(0)}%', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 9)),
+              decoration: BoxDecoration(color: AppColors.brownDark.withOpacity(0.06), borderRadius: BorderRadius.circular(5)),
+              child: Text('${p.$1} ${(p.$3 * 100).toStringAsFixed(0)}%', style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 9)),
             )).toList(),
           ),
           const SizedBox(height: 12),
@@ -850,9 +843,9 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
             child: ElevatedButton(
               onPressed: _spinning ? null : _spin,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF5C842),
+                backgroundColor: AppColors.gold,
                 foregroundColor: Colors.black,
-                disabledBackgroundColor: const Color(0xFFF5C842).withOpacity(0.3),
+                disabledBackgroundColor: AppColors.gold.withOpacity(0.3),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -897,18 +890,18 @@ class _GuildOverview extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [const Color(0xFFE8734A).withOpacity(0.12), const Color(0xFFA855F7).withOpacity(0.12)],
+          colors: [AppColors.primary.withOpacity(0.12), AppColors.purpleAccent.withOpacity(0.12)],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8734A).withOpacity(0.2)),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
       ),
       child: Column(
         children: [
           const Text('\u{1F3F0}', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 10),
-          const Text('PAINTER\'S GUILD', style: TextStyle(color: Color(0xFFE8734A), fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 1)),
+          const Text('PAINTER\'S GUILD', style: TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 1)),
           const SizedBox(height: 6),
-          Text('Team up with other painters for bonus rewards!', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6), fontSize: 12), textAlign: TextAlign.center),
+          Text('Team up with other painters for bonus rewards!', style: TextStyle(color: AppColors.brownDark.withOpacity(0.6), fontSize: 12), textAlign: TextAlign.center),
           const SizedBox(height: 16),
           // Guild perks preview
           Wrap(
@@ -927,7 +920,7 @@ class _GuildOverview extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () => _showCreateDialog(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE8734A),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -940,8 +933,8 @@ class _GuildOverview extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: () => _showJoinDialog(context),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFE8734A),
-                    side: const BorderSide(color: Color(0xFFE8734A)),
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
@@ -957,33 +950,33 @@ class _GuildOverview extends StatelessWidget {
 
   void _showCreateDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
-    final tagCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFFFF5E8),
+        backgroundColor: AppColors.dialogBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Create Guild', style: TextStyle(color: Color(0xFF6B5038), fontWeight: FontWeight.w800)),
+        title: const Text('Create Guild', style: TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w800)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: Color(0xFF6B5038)),
+              style: const TextStyle(color: AppColors.brownDark),
               decoration: InputDecoration(
                 labelText: 'Guild Name',
-                labelStyle: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5)),
+                labelStyle: TextStyle(color: AppColors.brownDark.withOpacity(0.5)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
-              controller: tagCtrl,
-              maxLength: 4,
-              style: const TextStyle(color: Color(0xFF6B5038)),
+              controller: descCtrl,
+              maxLines: 2,
+              style: const TextStyle(color: AppColors.brownDark),
               decoration: InputDecoration(
-                labelText: 'Tag (3-4 chars)',
-                labelStyle: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5)),
+                labelText: 'Description',
+                labelStyle: TextStyle(color: AppColors.brownDark.withOpacity(0.5)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -991,20 +984,20 @@ class _GuildOverview extends StatelessWidget {
             Row(children: [
               Image.asset('assets/images/UI/diamond250.png', width: 16, height: 16),
               const SizedBox(width: 4),
-              Text('Cost: 500 gems', style: TextStyle(color: const Color(0xFFA855F7).withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
+              Text('Cost: 500 gems', style: TextStyle(color: AppColors.purpleAccent.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
             ]),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B5038)))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.brownDark))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Guild creation coming soon!'), backgroundColor: Color(0xFFE8734A)),
+                const SnackBar(content: Text('Guild creation coming soon!'), backgroundColor: AppColors.primary),
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8734A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -1017,28 +1010,28 @@ class _GuildOverview extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFFFF5E8),
+        backgroundColor: AppColors.dialogBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Join Guild', style: TextStyle(color: Color(0xFF6B5038), fontWeight: FontWeight.w800)),
+        title: const Text('Join Guild', style: TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w800)),
         content: TextField(
           controller: codeCtrl,
-          style: const TextStyle(color: Color(0xFF6B5038)),
+          style: const TextStyle(color: AppColors.brownDark),
           decoration: InputDecoration(
             labelText: 'Invite Code',
-            labelStyle: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5)),
+            labelStyle: TextStyle(color: AppColors.brownDark.withOpacity(0.5)),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B5038)))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.brownDark))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Guild joining coming soon!'), backgroundColor: Color(0xFFE8734A)),
+                const SnackBar(content: Text('Guild joining coming soon!'), backgroundColor: AppColors.primary),
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8734A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             child: const Text('Join', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -1056,7 +1049,7 @@ class _PerkChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFF6B5038).withOpacity(0.08),
+        color: AppColors.brownDark.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1064,7 +1057,7 @@ class _PerkChip extends StatelessWidget {
         children: [
           Text(emoji, style: const TextStyle(fontSize: 13)),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6), fontSize: 11, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(color: AppColors.brownDark.withOpacity(0.6), fontSize: 11, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -1086,7 +1079,7 @@ class _GuildLeaderboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('TOP GUILDS', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
+        Text('TOP GUILDS', style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
         const SizedBox(height: 8),
         ..._mockGuilds.asMap().entries.map((e) {
           final i = e.key;
@@ -1096,23 +1089,23 @@ class _GuildLeaderboard extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: i == 0 ? const Color(0xFFF5C842).withOpacity(0.08) : const Color(0xFF6B5038).withOpacity(0.06),
+              color: i == 0 ? AppColors.gold.withOpacity(0.08) : AppColors.brownDark.withOpacity(0.06),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                SizedBox(width: 28, child: Text(i < 3 ? medals[i] : '${i + 1}.', style: TextStyle(fontSize: i < 3 ? 16 : 13, color: const Color(0xFF6B5038).withOpacity(0.7)))),
+                SizedBox(width: 28, child: Text(i < 3 ? medals[i] : '${i + 1}.', style: TextStyle(fontSize: i < 3 ? 16 : 13, color: AppColors.brownDark.withOpacity(0.7)))),
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(color: const Color(0xFFE8734A).withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-                  child: Text('[${g.$2}]', style: const TextStyle(color: Color(0xFFE8734A), fontSize: 10, fontWeight: FontWeight.w800)),
+                  decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                  child: Text('[${g.$2}]', style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.w800)),
                 ),
                 const SizedBox(width: 6),
-                Expanded(child: Text(g.$1, style: const TextStyle(color: Color(0xFF6B5038), fontSize: 13, fontWeight: FontWeight.w600))),
-                Text('${g.$3} members', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.4), fontSize: 10)),
+                Expanded(child: Text(g.$1, style: const TextStyle(color: AppColors.brownDark, fontSize: 13, fontWeight: FontWeight.w600))),
+                Text('${g.$3} members', style: TextStyle(color: AppColors.brownDark.withOpacity(0.4), fontSize: 10)),
                 const SizedBox(width: 8),
-                Text('${(g.$4 / 1000).toStringAsFixed(1)}K XP', style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 11, fontWeight: FontWeight.w700)),
+                Text('${(g.$4 / 1000).toStringAsFixed(1)}K XP', style: const TextStyle(color: AppColors.secondary, fontSize: 11, fontWeight: FontWeight.w700)),
               ],
             ),
           );
@@ -1137,7 +1130,7 @@ class _MinigamesTab extends StatelessWidget {
             emoji: '\u{26A1}',
             description: 'Paint as many walls as you can in 60 seconds!',
             reward: '+\$500 Cash',
-            color: const Color(0xFFE8734A),
+            color: AppColors.primary,
             cooldown: 'Ready',
             onPlay: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SpeedPaintMinigame())),
           ),
@@ -1147,7 +1140,7 @@ class _MinigamesTab extends StatelessWidget {
             emoji: '\u{1F3AF}',
             description: 'Hit exactly the target coverage percentage.',
             reward: '+2 Gems',
-            color: const Color(0xFF3B82F6),
+            color: AppColors.upgradeRoller,
             cooldown: 'Ready',
             onPlay: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BullseyeMinigame())),
           ),
@@ -1157,7 +1150,7 @@ class _MinigamesTab extends StatelessWidget {
             emoji: '\u{1F308}',
             description: 'Match paint colors in order from memory.',
             reward: 'Rare Item',
-            color: const Color(0xFFA855F7),
+            color: AppColors.purpleAccent,
             cooldown: 'Ready',
             onPlay: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ColorMatchMinigame())),
           ),
@@ -1167,7 +1160,7 @@ class _MinigamesTab extends StatelessWidget {
             emoji: '\u{1F3C3}',
             description: 'Each guild member paints one stripe. Best total wins!',
             reward: 'Guild XP',
-            color: const Color(0xFF4ADE80),
+            color: AppColors.secondary,
             cooldown: 'Needs Guild',
             onPlay: null,
           ),
@@ -1180,25 +1173,6 @@ class _MinigamesTab extends StatelessWidget {
     );
   }
 
-  static void _showMinigameDialog(BuildContext context, String name) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFFFF5E8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(name, style: const TextStyle(color: Color(0xFF6B5038), fontWeight: FontWeight.w800)),
-        content: Text('Minigame "$name" coming soon! Stay tuned for competitive challenges.',
-            style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.7))),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8734A), foregroundColor: Colors.white),
-            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _MinigameCard extends StatelessWidget {
@@ -1254,7 +1228,7 @@ class _MinigameCard extends StatelessWidget {
                   ),
                 ]),
                 const SizedBox(height: 3),
-                Text(description, style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.55), fontSize: 11)),
+                Text(description, style: TextStyle(color: AppColors.brownDark.withOpacity(0.55), fontSize: 11)),
               ],
             ),
           ),
@@ -1264,13 +1238,13 @@ class _MinigameCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: onPlay != null ? color : const Color(0xFF6B5038).withOpacity(0.1),
+                color: onPlay != null ? color : AppColors.brownDark.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 onPlay != null ? 'PLAY' : cooldown,
                 style: TextStyle(
-                  color: onPlay != null ? Colors.white : const Color(0xFF6B5038).withOpacity(0.4),
+                  color: onPlay != null ? Colors.white : AppColors.brownDark.withOpacity(0.4),
                   fontWeight: FontWeight.w800,
                   fontSize: 12,
                 ),
@@ -1297,7 +1271,7 @@ class _MinigameLeaderboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('MINIGAME RECORDS', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
+        Text('MINIGAME RECORDS', style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
         const SizedBox(height: 8),
         ..._mockEntries.asMap().entries.map((e) {
           final i = e.key;
@@ -1306,19 +1280,19 @@ class _MinigameLeaderboard extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF6B5038).withOpacity(0.06),
+              color: AppColors.brownDark.withOpacity(0.06),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                Text('${i + 1}.', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 12, fontWeight: FontWeight.w600)),
+                Text('${i + 1}.', style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 12, fontWeight: FontWeight.w600)),
                 const SizedBox(width: 8),
-                Expanded(child: Text(r.$1, style: const TextStyle(color: Color(0xFF6B5038), fontSize: 12, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(r.$1, style: const TextStyle(color: AppColors.brownDark, fontSize: 12, fontWeight: FontWeight.w600))),
                 Text(r.$4, style: const TextStyle(fontSize: 12)),
                 const SizedBox(width: 4),
-                Text(r.$2, style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.4), fontSize: 10)),
+                Text(r.$2, style: TextStyle(color: AppColors.brownDark.withOpacity(0.4), fontSize: 10)),
                 const SizedBox(width: 8),
-                Text(r.$3, style: const TextStyle(color: Color(0xFFE8734A), fontSize: 11, fontWeight: FontWeight.w700)),
+                Text(r.$3, style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
               ],
             ),
           );

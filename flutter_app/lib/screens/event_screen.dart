@@ -6,7 +6,8 @@ import '../services/event_service.dart';
 import '../services/marketplace_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/user_service.dart';
-import '../models/marketplace_item.dart';
+import '../theme/app_colors.dart';
+import '../utils/format_utils.dart';
 
 class EventScreen extends StatefulWidget {
   const EventScreen({super.key});
@@ -45,12 +46,12 @@ class _EventScreenState extends State<EventScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8D5B8),
+      backgroundColor: AppColors.background,
       body: Consumer<EventService>(
         builder: (context, es, _) {
           if (es.loading && es.events.isEmpty) {
             return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE8734A)),
+              child: CircularProgressIndicator(color: AppColors.primary),
             );
           }
 
@@ -58,7 +59,7 @@ class _EventScreenState extends State<EventScreen> {
 
           return RefreshIndicator(
             onRefresh: () => es.fetchEvents(),
-            color: const Color(0xFFE8734A),
+            color: AppColors.primary,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: SafeArea(
@@ -71,7 +72,7 @@ class _EventScreenState extends State<EventScreen> {
                       const Text(
                         'Events',
                         style: TextStyle(
-                          color: Color(0xFF6B5038),
+                          color: AppColors.brownDark,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                         ),
@@ -132,7 +133,7 @@ class _LiveEventCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFA855F7), Color(0xFFE8734A)],
+          colors: [AppColors.purpleAccent, AppColors.primary],
         ),
         borderRadius: BorderRadius.circular(20),
       ),
@@ -225,13 +226,13 @@ class _LiveEventCard extends StatelessWidget {
                 margin: const EdgeInsets.only(left: 6),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: used ? const Color(0xFFD5C4A8) : const Color(0xFFE8734A).withOpacity(0.2),
-                  border: Border.all(color: used ? Colors.white24 : const Color(0xFFE8734A), width: 2),
+                  color: used ? AppColors.inputBorder : AppColors.primary.withOpacity(0.2),
+                  border: Border.all(color: used ? Colors.white24 : AppColors.primary, width: 2),
                 ),
                 child: Center(
                   child: used
                       ? const Icon(Icons.check, color: Colors.white38, size: 14)
-                      : Text('${i + 1}', style: const TextStyle(color: Color(0xFFE8734A), fontSize: 12, fontWeight: FontWeight.bold)),
+                      : Text('${i + 1}', style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
               );
             }),
@@ -247,7 +248,7 @@ class _LiveEventCard extends StatelessWidget {
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFFE8734A),
+                foregroundColor: AppColors.primary,
                 disabledBackgroundColor: Colors.white.withOpacity(0.3),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -297,7 +298,7 @@ class _LiveEventCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF6B5038),
+        backgroundColor: AppColors.brownDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Item Drop!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
         content: Column(
@@ -346,10 +347,10 @@ class _LiveEventCard extends StatelessWidget {
   static Color _rarityColor(String rarity) {
     switch (rarity) {
       case 'common': return Colors.grey;
-      case 'uncommon': return const Color(0xFF4ADE80);
-      case 'rare': return const Color(0xFF3B82F6);
-      case 'epic': return const Color(0xFFA855F7);
-      case 'legendary': return const Color(0xFFF59E0B);
+      case 'uncommon': return AppColors.rarityUncommon;
+      case 'rare': return AppColors.rarityRare;
+      case 'epic': return AppColors.rarityEpic;
+      case 'legendary': return AppColors.rarityLegendary;
       default: return Colors.grey;
     }
   }
@@ -404,7 +405,7 @@ class _NoEventsCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF6B5038).withOpacity(0.5),
+        color: AppColors.brownDark.withOpacity(0.5),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -481,7 +482,7 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
         Text(
           'DAILY LOTTERY',
           style: TextStyle(
-            color: const Color(0xFF6B5038).withOpacity(0.5),
+            color: AppColors.brownDark.withOpacity(0.5),
             fontSize: 11,
             fontWeight: FontWeight.bold,
             letterSpacing: 2,
@@ -494,12 +495,12 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                const Color(0xFFF5C842).withOpacity(0.15),
-                const Color(0xFFE8734A).withOpacity(0.15),
+                AppColors.gold.withOpacity(0.15),
+                AppColors.primary.withOpacity(0.15),
               ],
             ),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFF5C842).withOpacity(0.3)),
+            border: Border.all(color: AppColors.gold.withOpacity(0.3)),
           ),
           child: Column(
             children: [
@@ -509,11 +510,11 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
               ),
               const SizedBox(height: 12),
               if (_result != null && !_spinning)
-                Text(_result!, style: const TextStyle(color: Color(0xFFF5C842), fontWeight: FontWeight.w700, fontSize: 18))
+                Text(_result!, style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700, fontSize: 18))
               else if (_spinning)
-                const Text('Spinning...', style: TextStyle(color: Color(0xFFE8734A), fontWeight: FontWeight.w600, fontSize: 14))
+                const Text('Spinning...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14))
               else
-                Text('Spin for a free daily reward!', style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6), fontSize: 13)),
+                Text('Spin for a free daily reward!', style: TextStyle(color: AppColors.brownDark.withOpacity(0.6), fontSize: 13)),
               const SizedBox(height: 16),
               // Prize table
               Wrap(
@@ -524,12 +525,12 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6B5038).withOpacity(0.08),
+                      color: AppColors.brownDark.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       '${p.$1} ${(p.$3 * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.5), fontSize: 10),
+                      style: TextStyle(color: AppColors.brownDark.withOpacity(0.5), fontSize: 10),
                     ),
                   );
                 }).toList(),
@@ -540,9 +541,9 @@ class _DailyLotteryCardState extends State<_DailyLotteryCard> {
                 child: ElevatedButton(
                   onPressed: _spinning ? null : _spin,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF5C842),
+                    backgroundColor: AppColors.gold,
                     foregroundColor: Colors.black,
-                    disabledBackgroundColor: const Color(0xFFF5C842).withOpacity(0.3),
+                    disabledBackgroundColor: AppColors.gold.withOpacity(0.3),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
@@ -604,7 +605,7 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
             Text(
               "PAINTER'S CUP",
               style: TextStyle(
-                color: const Color(0xFF6B5038).withOpacity(0.5),
+                color: AppColors.brownDark.withOpacity(0.5),
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 2,
@@ -615,10 +616,10 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF6B5038),
+                color: AppColors.brownDark,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                    color: AppColors.upgradeRoller.withOpacity(0.3)),
               ),
               child: Column(
                 children: [
@@ -628,7 +629,7 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                   const Text(
                     "PAINTER'S CUP",
                     style: TextStyle(
-                      color: Color(0xFF3B82F6),
+                      color: AppColors.upgradeRoller,
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1,
@@ -663,10 +664,10 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF5C842),
+                          backgroundColor: AppColors.gold,
                           foregroundColor: Colors.black,
                           disabledBackgroundColor:
-                              const Color(0xFFF5C842).withOpacity(0.3),
+                              AppColors.gold.withOpacity(0.3),
                           padding:
                               const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -686,17 +687,17 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4ADE80).withOpacity(0.15),
+                        color: AppColors.secondary.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                             color:
-                                const Color(0xFF4ADE80).withOpacity(0.4)),
+                                AppColors.secondary.withOpacity(0.4)),
                       ),
                       child: const Center(
                         child: Text(
                           '\u2705  PARTICIPATING',
                           style: TextStyle(
-                            color: Color(0xFF4ADE80),
+                            color: AppColors.secondary,
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                           ),
@@ -740,7 +741,7 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                                 right: i == 2 ? 0 : 4),
                             decoration: BoxDecoration(
                               color: sel
-                                  ? const Color(0xFF3B82F6)
+                                  ? AppColors.upgradeRoller
                                   : Colors.white.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -768,7 +769,7 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: CircularProgressIndicator(
-                          color: Color(0xFF3B82F6), strokeWidth: 2),
+                          color: AppColors.upgradeRoller, strokeWidth: 2),
                     )
                   else if (board.isEmpty)
                     Padding(
@@ -869,22 +870,13 @@ class _LeaderboardCardState extends State<_LeaderboardCard> {
       return '${(value * 100).toStringAsFixed(1)}%';
     } else if (tab == 1) {
       // Coins: comma-formatted integer
-      return _fmtCommas(value);
+      return fmtCommas(value);
     } else {
       // Walls: integer
       return value.toInt().toString();
     }
   }
 
-  static String _fmtCommas(double v) {
-    final s = v.toStringAsFixed(0);
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
-      buf.write(s[i]);
-    }
-    return buf.toString();
-  }
 }
 
 class _LeaderboardRow extends StatelessWidget {
@@ -914,14 +906,14 @@ class _LeaderboardRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isMe
-              ? const Color(0xFF3B82F6).withOpacity(0.18)
+              ? AppColors.upgradeRoller.withOpacity(0.18)
               : rank == 1
-                  ? const Color(0xFFF5C842).withOpacity(0.1)
+                  ? AppColors.gold.withOpacity(0.1)
                   : Colors.white.withOpacity(0.05),
           borderRadius: BorderRadius.circular(8),
           border: isMe
               ? Border.all(
-                  color: const Color(0xFF3B82F6).withOpacity(0.4))
+                  color: AppColors.upgradeRoller.withOpacity(0.4))
               : null,
         ),
         child: Row(
@@ -942,7 +934,7 @@ class _LeaderboardRow extends StatelessWidget {
               child: Text(
                 username,
                 style: TextStyle(
-                  color: isMe ? const Color(0xFF3B82F6) : Colors.white,
+                  color: isMe ? AppColors.upgradeRoller : Colors.white,
                   fontSize: 13,
                   fontWeight: isMe ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -982,9 +974,9 @@ class _MarketNote extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5C842).withOpacity(0.06),
+        color: AppColors.gold.withOpacity(0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF5C842).withOpacity(0.15)),
+        border: Border.all(color: AppColors.gold.withOpacity(0.15)),
       ),
       child: Row(
         children: [
@@ -993,7 +985,7 @@ class _MarketNote extends StatelessWidget {
           Expanded(
             child: Text(
               'Event items enter the market during drops. Index prices may fluctuate. Tournament winners earn exclusive titles.',
-              style: TextStyle(color: const Color(0xFFF5C842).withOpacity(0.7), fontSize: 11, height: 1.4),
+              style: TextStyle(color: AppColors.gold.withOpacity(0.7), fontSize: 11, height: 1.4),
             ),
           ),
         ],

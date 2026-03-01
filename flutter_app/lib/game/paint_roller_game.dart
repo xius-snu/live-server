@@ -1,6 +1,7 @@
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import '../config/game_config.dart';
 import 'game_state.dart';
 import 'components/wall_component.dart';
 import 'components/roller_component.dart';
@@ -34,31 +35,28 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
   double wallSlide = 0.0;
 
   // Config from upgrades
-  double _rollerWidthFraction = 0.15; // base 15% of wall per stroke
+  double _rollerWidthFraction = kRollerBaseWidthFraction;
   double _rollerSpeedMultiplier = 1.0;
-  int _maxStrokes = 6;
-  Color _wallColor = const Color(0xFFE8DCC8);
-  Color _dirtColor = const Color(0xFFC4A882);
+  int _maxStrokes = kRollerBaseStrokes;
+  Color _wallColor = const Color(kDefaultWallColor);
+  Color _dirtColor = const Color(kDefaultDirtColor);
 
   // Paint color comes from the equipped roller skin.
-  Color _rollerPaintColor = const Color(0xFFFF3B30); // default roller: bright red
+  Color _rollerPaintColor = const Color(kDefaultRollerPaintColor);
   BlendMode _rollerPaintBlendMode = BlendMode.srcOver;
 
   // Seed counter so wall patterns vary each round.
   int _wallSeedCounter = 0;
 
-  // Reference width ensures difficulty is identical across all screen sizes.
-  static const double _referenceWidth = 400.0;
-
   double get _wallWidth {
     final bgWallRect = background.getWallRect();
-    final maxWallW = _referenceWidth;
-    return (bgWallRect.width * 0.90).clamp(80.0, maxWallW);
+    final maxWallW = kWallReferenceWidth;
+    return (bgWallRect.width * kWallWidthClampFactor).clamp(kWallMinWidth, maxWallW);
   }
 
   double get _wallHeight {
     final bgWallRect = background.getWallRect();
-    return (bgWallRect.height * 0.88).clamp(80.0, 2000.0);
+    return (bgWallRect.height * kWallHeightClampFactor).clamp(kWallMinHeight, kWallMaxHeight);
   }
 
   double get _wallLeft {
@@ -68,20 +66,17 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
   double get _wallTop {
     final bgWallRect = background.getWallRect();
-    return bgWallRect.top + bgWallRect.height * 0.03;
+    return bgWallRect.top + bgWallRect.height * kWallTopOffsetFraction;
   }
 
-  // Roller is a square sprite (600x600 PNG) — size proportional to wall.
-  static const double _rollerContactFraction = (400 - 200) / 600; // 1/3 of sprite
-
   double get _rollerSize =>
-      (_rollerWidthFraction / _rollerContactFraction * _wallWidth)
-          .clamp(70.0, 400.0);
+      (_rollerWidthFraction / kRollerContactFraction * _wallWidth)
+          .clamp(kRollerMinSize, kRollerMaxSize);
 
   PaintRollerGame();
 
   @override
-  Color backgroundColor() => const Color(0xFFBCF9F1); // match ceiling color
+  Color backgroundColor() => const Color(kGameBackgroundColor);
 
   @override
   Future<void> onLoad() async {
@@ -109,7 +104,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
     patternOverlay = WallPatternOverlay(wall: wall);
     patternOverlay.position = Vector2(_wallLeft, _wallTop);
     patternOverlay.size = Vector2(_wallWidth, _wallHeight);
-    patternOverlay.priority = 15; // above paint stripes (0), below roller (20)
+    patternOverlay.priority = kPriorityPatternOverlay;
     add(patternOverlay);
 
     roller = RollerComponent(
@@ -122,7 +117,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
       size: Vector2(_rollerSize, _rollerSize),
     );
     roller.setDrawSize(_rollerSize);
-    roller.priority = 20; // above paint stripes
+    roller.priority = kPriorityRoller;
     add(roller);
 
     // Border rendered on top of everything
@@ -130,7 +125,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
       position: Vector2(_wallLeft, _wallTop),
       size: Vector2(_wallWidth, _wallHeight),
     );
-    wallBorder.priority = 30; // above roller and paint stripes
+    wallBorder.priority = kPriorityWallBorder;
     add(wallBorder);
   }
 
@@ -179,9 +174,8 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
       wall.updateColors(room.wallColor, room.dirtColor, _rollerPaintColor);
       wall.updateHouseTier(houseTier, level: cycleLevel);
       wall.updateSeed(_wallSeedCounter);
-      wallBorder.borderColor = const Color(0xFF000000);
+      wallBorder.borderColor = const Color(kDefaultBorderColor);
       roller.speedMultiplier = rollerSpeedMultiplier;
-      roller.setPaintColor(_rollerPaintColor);
       roller.setDrawSize(_rollerSize);
       _startNewRound();
     }
@@ -217,9 +211,6 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
   /// Change the paint color at runtime (e.g. when equipping a new skin).
   void setRollerPaintColor(Color color) {
     _rollerPaintColor = color;
-    if (isMounted) {
-      roller.setPaintColor(color);
-    }
   }
 
   void _startNewRound() {
@@ -261,7 +252,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
     roller.triggerPaintStroke();
 
-    final rollerContactWidth = _rollerSize * _rollerContactFraction;
+    final rollerContactWidth = _rollerSize * kRollerContactFraction;
 
     double stripeX = roller.pixelX - rollerContactWidth / 2;
     final wallRight = _wallLeft + _wallWidth;
@@ -286,7 +277,7 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
     final combo = roundState.strokesUsed; // 1-based after addStripe
 
-    final splatOrigin = Vector2(roller.pixelX, _wallTop + _wallHeight * 0.82);
+    final splatOrigin = Vector2(roller.pixelX, _wallTop + _wallHeight * kSplatOriginYFraction);
     _spawnSplats(splatOrigin, rollerContactWidth, combo);
 
     // Floating coverage text with combo
@@ -296,12 +287,12 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
 
     if (!roundState.isActive) {
       // Coverage shimmer for NICE (90%+), GREAT (95%+), and PERFECT (100%)
-      if (roundState.getCoverageDisplayPercent() >= 90) {
+      if (roundState.getCoverageDisplayPercent() >= kShimmerCoverageThreshold) {
         final shimmer = PerfectShimmerComponent(
           position: Vector2(_wallLeft, _wallTop),
           size: Vector2(_wallWidth, _wallHeight),
         );
-        shimmer.priority = 28; // above stripes, below border
+        shimmer.priority = kPriorityShimmer;
         add(shimmer);
       }
       roundState.showingResults = true;
@@ -315,23 +306,22 @@ class PaintRollerGame extends FlameGame with TapCallbacks {
       text: '$coveragePct%',
       color: Colors.white,
       comboCount: combo,
-      position: Vector2(centerX - 70, _wallTop + _wallHeight * 0.25),
+      position: Vector2(centerX - kCoverageTextXOffset, _wallTop + _wallHeight * kCoverageTextYFraction),
     );
-    text.priority = 35; // above everything
+    text.priority = kPriorityCoverageText;
     add(text);
   }
 
   void _spawnSplats(Vector2 origin, double contactWidth, int combo) {
-    // Scale particle count with combo: 14 base, up to 24 at high combo
-    final count = combo >= 5 ? 24 : combo >= 3 ? 18 : 14;
+    final count = combo >= 5 ? kSplatHighComboCount : combo >= 3 ? kSplatMedComboCount : kSplatDefaultCount;
     final particles = PaintSplatParticle.burst(
       color: _rollerPaintColor,
       origin: origin,
       count: count,
-      spreadWidth: contactWidth * 0.8,
+      spreadWidth: contactWidth * kSplatSpreadWidthFactor,
     );
     for (final p in particles) {
-      p.priority = 25; // above stripes, below border
+      p.priority = kPrioritySplatParticle;
       add(p);
     }
   }

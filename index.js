@@ -1,7 +1,7 @@
 require('dotenv').config();
 const fastify = require('fastify')({ logger: true });
 fastify.register(require('@fastify/cors'), {
-    origin: '*',
+    origin: ['https://liveserver-82b8.web.app', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE']
 });
 fastify.register(require('@fastify/websocket'));
@@ -15,7 +15,7 @@ const crypto = require('crypto');
 const DATABASE_URL = process.env.DATABASE_URL;
 const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: true }
 });
 
 // ============================================
@@ -56,6 +56,80 @@ function broadcastMarketplace(data) {
 
 function generateId(prefix = 'id') {
     return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+}
+
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// ============================================
+// INPUT VALIDATION
+// ============================================
+
+function validateString(value, { minLen = 1, maxLen = 255, pattern = null, name = 'field' } = {}) {
+    if (typeof value !== 'string') return `${name} must be a string`;
+    if (value.length < minLen) return `${name} must be at least ${minLen} characters`;
+    if (value.length > maxLen) return `${name} must be at most ${maxLen} characters`;
+    if (pattern && !pattern.test(value)) return `${name} contains invalid characters`;
+    return null;
+}
+
+function validateNumber(value, { min = -Infinity, max = Infinity, integer = false, name = 'field' } = {}) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return `${name} must be a valid number`;
+    if (integer && !Number.isInteger(n)) return `${name} must be an integer`;
+    if (n < min) return `${name} must be >= ${min}`;
+    if (n > max) return `${name} must be <= ${max}`;
+    return null;
+}
+
+// ============================================
+// AUTH MIDDLEWARE
+// ============================================
+
+// Public routes that skip auth (read-only or registration)
+const PUBLIC_ROUTES = new Set([
+    'GET:/',
+    'GET:/api/marketplace/listings',
+    'GET:/api/marketplace/index-prices',
+    'GET:/api/events/active',
+    'GET:/api/leaderboard/current',
+    'POST:/api/user', // registration handled separately with its own token logic
+    'GET:/api/user/by-code/:code',
+    'GET:/api/friends/:userId',
+    'GET:/api/user/:userId/profile',
+]);
+
+async function authenticateRequest(req, reply) {
+    const routeKey = `${req.method}:${req.routeOptions?.url || req.url.split('?')[0]}`;
+    if (PUBLIC_ROUTES.has(routeKey)) return;
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Missing or invalid authorization header' });
+    }
+
+    const token = authHeader.substring(7);
+    const tokenHash = hashToken(token);
+
+    // Extract userId from body, params, or query
+    const userId = req.body?.userId || req.params?.userId || req.query?.userId;
+    if (!userId) {
+        return reply.code(401).send({ error: 'Missing userId' });
+    }
+
+    try {
+        const res = await pool.query(
+            'SELECT auth_token_hash FROM users WHERE user_id = $1',
+            [userId]
+        );
+        if (res.rows.length === 0 || res.rows[0].auth_token_hash !== tokenHash) {
+            return reply.code(401).send({ error: 'Invalid auth token' });
+        }
+    } catch (e) {
+        fastify.log.error('Auth error: ' + e.message);
+        return reply.code(500).send({ error: 'Auth verification failed' });
+    }
 }
 
 // ============================================
@@ -268,33 +342,101 @@ fastify.register(async function (fastify) {
 
     // Safe migrations for new columns
     try {
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_token_hash TEXT');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_listings_status ON marketplace_listings(status)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_inventory_owner ON player_inventory(owner_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_trades_item ON marketplace_trades(item_type_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_lb_coverage ON leaderboard_participants(week_id, weekly_coverage DESC)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_lb_coins ON leaderboard_participants(week_id, weekly_coins_earned DESC)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_lb_walls ON leaderboard_participants(week_id, weekly_walls_painted DESC)');
+        // Roller item columns for marketplace inventory
+        await pool.query('ALTER TABLE player_inventory ADD COLUMN IF NOT EXISTS roller_id TEXT');
+        await pool.query('ALTER TABLE player_inventory ADD COLUMN IF NOT EXISTS color_id TEXT');
+        await pool.query('ALTER TABLE player_inventory ADD COLUMN IF NOT EXISTS color_tier TEXT');
+        await pool.query('ALTER TABLE player_inventory ADD COLUMN IF NOT EXISTS color_hex INTEGER');
+        // Friend system columns
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS friend_code TEXT');
+        await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_friend_code ON users(friend_code) WHERE friend_code IS NOT NULL');
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS friends (
+                user_id TEXT NOT NULL REFERENCES users(user_id),
+                friend_id TEXT NOT NULL REFERENCES users(user_id),
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, friend_id)
+            )
+        `);
         console.log('Schema migration complete');
     } catch (e) {
         console.log('Schema migration note:', e.message);
     }
+
+    // Register auth middleware for all routes
+    fastify.addHook('preHandler', authenticateRequest);
 
     // ==================
     // REST API: USER
     // ==================
 
     fastify.post('/api/user', async (req, reply) => {
-        const { userId, username } = req.body;
+        const { userId, username, friendCode } = req.body;
         if (!userId || !username) {
             return reply.code(400).send({ error: 'Missing userId or username' });
         }
+
+        // Validate username
+        const usernameErr = validateString(username.trim(), {
+            minLen: 1, maxLen: 20,
+            pattern: /^[a-zA-Z0-9 _]+$/,
+            name: 'username',
+        });
+        if (usernameErr) return reply.code(400).send({ error: usernameErr });
+
+        const trimmedName = username.trim();
+
         try {
+            // Check if user already exists
+            const existing = await pool.query(
+                'SELECT auth_token_hash FROM users WHERE user_id = $1',
+                [userId]
+            );
+
+            if (existing.rows.length > 0 && existing.rows[0].auth_token_hash) {
+                // Existing user with token: require Bearer auth to update username
+                const authHeader = req.headers['authorization'];
+                if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                    return reply.code(401).send({ error: 'Auth token required to update username' });
+                }
+                const token = authHeader.substring(7);
+                const tokenHash = hashToken(token);
+                if (tokenHash !== existing.rows[0].auth_token_hash) {
+                    return reply.code(401).send({ error: 'Invalid auth token' });
+                }
+
+                if (friendCode) {
+                    await pool.query(
+                        'UPDATE users SET username = $1, friend_code = COALESCE(friend_code, $3) WHERE user_id = $2',
+                        [trimmedName, userId, friendCode]
+                    );
+                } else {
+                    await pool.query(
+                        'UPDATE users SET username = $1 WHERE user_id = $2',
+                        [trimmedName, userId]
+                    );
+                }
+                return { success: true, username: trimmedName };
+            }
+
+            // New user or existing user without token: generate new token
+            const newToken = crypto.randomUUID();
+            const newTokenHash = hashToken(newToken);
+
             await pool.query(`
-                INSERT INTO users (user_id, username)
-                VALUES ($1, $2)
-                ON CONFLICT (user_id) DO UPDATE SET username = $2
-            `, [userId, username]);
-            return { success: true, username };
+                INSERT INTO users (user_id, username, auth_token_hash, friend_code)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id) DO UPDATE SET username = $2, auth_token_hash = $3, friend_code = COALESCE(users.friend_code, $4)
+            `, [userId, trimmedName, newTokenHash, friendCode || null]);
+
+            return { success: true, username: trimmedName, token: newToken };
         } catch (e) {
             fastify.log.error('DB User Error: ' + e.message);
             return reply.code(500).send({ error: 'Database error' });
@@ -319,6 +461,99 @@ fastify.register(async function (fastify) {
     });
 
     // ==================
+    // REST API: FRIENDS
+    // ==================
+
+    // Look up user by friend code
+    fastify.get('/api/user/by-code/:code', async (req, reply) => {
+        const { code } = req.params;
+        try {
+            const res = await pool.query(
+                'SELECT user_id, username, friend_code FROM users WHERE friend_code = $1',
+                [code.toUpperCase()]
+            );
+            if (res.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+            return res.rows[0];
+        } catch (e) {
+            fastify.log.error('Friend lookup error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Add friend
+    fastify.post('/api/friends/add', async (req, reply) => {
+        const { userId, friendId } = req.body;
+        if (!userId || !friendId) return reply.code(400).send({ error: 'Missing userId or friendId' });
+        if (userId === friendId) return reply.code(400).send({ error: 'Cannot add yourself' });
+        try {
+            await pool.query(
+                'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [userId, friendId]
+            );
+            return { success: true };
+        } catch (e) {
+            fastify.log.error('Add friend error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Remove friend
+    fastify.post('/api/friends/remove', async (req, reply) => {
+        const { userId, friendId } = req.body;
+        if (!userId || !friendId) return reply.code(400).send({ error: 'Missing userId or friendId' });
+        try {
+            await pool.query('DELETE FROM friends WHERE user_id = $1 AND friend_id = $2', [userId, friendId]);
+            return { success: true };
+        } catch (e) {
+            fastify.log.error('Remove friend error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // List friends
+    fastify.get('/api/friends/:userId', async (req, reply) => {
+        const { userId } = req.params;
+        try {
+            const res = await pool.query(`
+                SELECT u.user_id, u.username, u.friend_code,
+                       pp.cash, pp.stars, pp.prestige_level, pp.total_walls_painted, pp.total_cash_earned
+                FROM friends f
+                JOIN users u ON u.user_id = f.friend_id
+                LEFT JOIN player_progress pp ON pp.user_id = f.friend_id
+                WHERE f.user_id = $1
+                ORDER BY f.added_at DESC
+            `, [userId]);
+            return { friends: res.rows };
+        } catch (e) {
+            fastify.log.error('List friends error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // Get user profile (public view for friends)
+    fastify.get('/api/user/:userId/profile', async (req, reply) => {
+        const { userId } = req.params;
+        try {
+            const userRes = await pool.query(
+                'SELECT user_id, username, friend_code FROM users WHERE user_id = $1',
+                [userId]
+            );
+            if (userRes.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
+
+            const progRes = await pool.query(
+                'SELECT cash, stars, prestige_level, total_walls_painted, total_cash_earned FROM player_progress WHERE user_id = $1',
+                [userId]
+            );
+            const progress = progRes.rows.length > 0 ? progRes.rows[0] : {};
+
+            return { user: userRes.rows[0], progress };
+        } catch (e) {
+            fastify.log.error('Profile error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        }
+    });
+
+    // ==================
     // REST API: PROGRESS
     // ==================
 
@@ -326,6 +561,16 @@ fastify.register(async function (fastify) {
         const { userId, cash, stars, prestigeLevel, currentHouse, currentRoom,
                 upgrades, totalWallsPainted, totalCashEarned } = req.body;
         if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        // Validate numeric fields
+        const errors = [
+            cash != null && validateNumber(cash, { min: 0, max: 1e15, name: 'cash' }),
+            stars != null && validateNumber(stars, { min: 0, max: 1e6, integer: true, name: 'stars' }),
+            prestigeLevel != null && validateNumber(prestigeLevel, { min: 0, max: 10000, integer: true, name: 'prestigeLevel' }),
+            totalWallsPainted != null && validateNumber(totalWallsPainted, { min: 0, integer: true, name: 'totalWallsPainted' }),
+            totalCashEarned != null && validateNumber(totalCashEarned, { min: 0, name: 'totalCashEarned' }),
+        ].filter(Boolean);
+        if (errors.length > 0) return reply.code(400).send({ error: errors[0] });
 
         try {
             await pool.query(`
@@ -423,12 +668,13 @@ fastify.register(async function (fastify) {
     // ==================
 
     fastify.get('/api/marketplace/listings', async (req, reply) => {
-        const { category, sort } = req.query;
+        const { category, sort, rollerId, colorTier, minPrice, maxPrice } = req.query;
         try {
             let query = `
                 SELECT ml.listing_id, ml.seller_id, ml.instance_id, ml.price_stars,
                        ml.listing_fee_percent, ml.listed_at, ml.status,
                        pi.item_type_id, pi.rarity,
+                       pi.roller_id, pi.color_id, pi.color_tier, pi.color_hex,
                        u.username as seller_name
                 FROM marketplace_listings ml
                 JOIN player_inventory pi ON ml.instance_id = pi.instance_id
@@ -436,13 +682,31 @@ fastify.register(async function (fastify) {
                 WHERE ml.status = 'active'
             `;
             const params = [];
+            let paramIdx = 1;
 
-            if (category) {
-                // Filter by item category would need item_types table or inline check
-                // For now, filter by item_type_id pattern
+            if (rollerId) {
+                query += ` AND pi.roller_id = $${paramIdx++}`;
+                params.push(rollerId);
+            }
+            if (colorTier) {
+                query += ` AND pi.color_tier = $${paramIdx++}`;
+                params.push(colorTier);
+            }
+            if (minPrice) {
+                query += ` AND ml.price_stars >= $${paramIdx++}`;
+                params.push(parseInt(minPrice));
+            }
+            if (maxPrice) {
+                query += ` AND ml.price_stars <= $${paramIdx++}`;
+                params.push(parseInt(maxPrice));
             }
 
-            query += ' ORDER BY ml.listed_at DESC LIMIT 50';
+            const sortMap = {
+                'price_low': 'ml.price_stars ASC',
+                'price_high': 'ml.price_stars DESC',
+                'rarity': 'pi.rarity DESC',
+            };
+            query += ` ORDER BY ${sortMap[sort] || 'ml.listed_at DESC'} LIMIT 50`;
 
             const res = await pool.query(query, params);
             return { listings: res.rows };
@@ -496,6 +760,14 @@ fastify.register(async function (fastify) {
         const { userId, instanceId, priceStars, feePercent } = req.body;
         if (!userId || !instanceId || !priceStars) {
             return reply.code(400).send({ error: 'Missing required fields' });
+        }
+
+        const priceErr = validateNumber(priceStars, { min: 1, max: 1e6, integer: true, name: 'priceStars' });
+        if (priceErr) return reply.code(400).send({ error: priceErr });
+
+        if (feePercent != null) {
+            const feeErr = validateNumber(feePercent, { min: 0, max: 100, name: 'feePercent' });
+            if (feeErr) return reply.code(400).send({ error: feeErr });
         }
 
         const client = await pool.connect();
@@ -637,10 +909,23 @@ fastify.register(async function (fastify) {
                 priceStars: listing.price_stars
             });
 
+            // Fetch roller metadata if this is a roller item
+            const itemRes = await client.query(
+                'SELECT roller_id, color_id, color_tier, color_hex FROM player_inventory WHERE instance_id = $1',
+                [listing.instance_id]
+            );
+            const itemData = itemRes.rows[0] || {};
+
             return {
                 success: true,
                 starsSpent: listing.price_stars,
-                itemReceived: listing.instance_id
+                itemReceived: listing.instance_id,
+                rollerInfo: itemData.roller_id ? {
+                    rollerId: itemData.roller_id,
+                    colorId: itemData.color_id,
+                    colorTier: itemData.color_tier,
+                    colorHex: itemData.color_hex,
+                } : null,
             };
         } catch (e) {
             await client.query('ROLLBACK');
@@ -692,6 +977,63 @@ fastify.register(async function (fastify) {
         }
     });
 
+    // List a roller+color item from local inventory onto the marketplace
+    fastify.post('/api/marketplace/list-roller', async (req, reply) => {
+        const { userId, rollerId, colorId, colorTier, colorHex, priceStars, feePercent } = req.body;
+        if (!userId || !rollerId || !colorId || !priceStars) {
+            return reply.code(400).send({ error: 'Missing required fields' });
+        }
+        const priceErr = validateNumber(priceStars, { min: 1, max: 1000000, integer: true, name: 'priceStars' });
+        if (priceErr) return reply.code(400).send({ error: priceErr });
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const instanceId = generateId('ri');
+            const itemTypeId = `roller_${rollerId}_${colorId}`;
+
+            await client.query(
+                `INSERT INTO player_inventory
+                    (instance_id, item_type_id, rarity, owner_id, roller_id, color_id, color_tier, color_hex, is_listed)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)`,
+                [instanceId, itemTypeId, colorTier || 'common', userId, rollerId, colorId, colorTier || 'common', colorHex || 0]
+            );
+
+            const listingId = generateId('lst');
+            const fee = feePercent || 5.0;
+
+            await client.query(
+                `INSERT INTO marketplace_listings (listing_id, seller_id, instance_id, price_stars, listing_fee_percent)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [listingId, userId, instanceId, priceStars, fee]
+            );
+
+            await client.query('COMMIT');
+
+            // Get seller username
+            const userRes = await pool.query('SELECT username FROM users WHERE user_id = $1', [userId]);
+            const sellerName = userRes.rows[0]?.username || userId.substring(0, 8);
+
+            broadcastMarketplace({
+                type: 'new_listing',
+                listingId,
+                itemTypeId,
+                priceStars,
+                sellerName,
+                rollerInfo: { rollerId, colorId, colorTier }
+            });
+
+            return { success: true, listingId };
+        } catch (e) {
+            await client.query('ROLLBACK');
+            fastify.log.error('Marketplace list-roller error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
+        } finally {
+            client.release();
+        }
+    });
+
     // ==================
     // REST API: EVENTS
     // ==================
@@ -726,6 +1068,11 @@ fastify.register(async function (fastify) {
         const { eventId } = req.params;
         const { userId, coveragePercent } = req.body;
         if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        if (coveragePercent != null) {
+            const covErr = validateNumber(coveragePercent, { min: 0, max: 1.0, name: 'coveragePercent' });
+            if (covErr) return reply.code(400).send({ error: covErr });
+        }
 
         try {
             // Get event
@@ -863,6 +1210,12 @@ fastify.register(async function (fastify) {
     fastify.post('/api/leaderboard/submit', async (req, reply) => {
         const { userId, coverage, coinsEarned } = req.body;
         if (!userId) return reply.code(400).send({ error: 'Missing userId' });
+
+        const errors = [
+            coverage != null && validateNumber(coverage, { min: 0, max: 1.0, name: 'coverage' }),
+            coinsEarned != null && validateNumber(coinsEarned, { min: 0, max: 1e9, name: 'coinsEarned' }),
+        ].filter(Boolean);
+        if (errors.length > 0) return reply.code(400).send({ error: errors[0] });
 
         try {
             const weekId = getCurrentWeekId();

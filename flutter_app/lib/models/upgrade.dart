@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../config/game_config.dart';
 
 enum UpgradeType {
   widerRoller, // kept for save migration, not shown in UI
@@ -43,18 +44,18 @@ class UpgradeDefinition {
   String cumulativeEffect(int level) {
     switch (type) {
       case UpgradeType.widerRoller:
-        return '+${level * 2}% width';
+        return '+${level * kUpgradeWiderRollerPerLevel}% width';
       case UpgradeType.turboSpeed:
-        return '+${level * 10}% cash';
+        return '+${level * kUpgradeTurboSpeedPerLevel}% cash';
       case UpgradeType.steadyHand:
-        final reduction = (level * 7).clamp(0, 70);
+        final reduction = (level * kUpgradeSteadyHandPerLevel).clamp(0, kUpgradeSteadyHandMaxReduction);
         return '-$reduction% speed';
       case UpgradeType.autoPainter:
-        return '\$${level * 2}/sec';
+        return '\$${level * kUpgradeAutoPainterPerLevel.toInt()}/sec';
       case UpgradeType.extraStroke:
         return '+$level strokes';
       case UpgradeType.brokerLicense:
-        return '${5 - level}% fee';
+        return '${kUpgradeBrokerBaseFee - level}% fee';
     }
   }
 

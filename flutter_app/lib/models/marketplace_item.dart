@@ -1,6 +1,6 @@
 enum ItemCategory { paint, rollerSkin, consumable, collectible }
 
-enum ItemRarity { common, uncommon, rare, epic, legendary }
+enum ItemRarity { common, uncommon, rare, epic, legendary, mythic }
 
 class MarketplaceItemType {
   final String id;
@@ -130,6 +130,11 @@ class SerializedItem {
   final DateTime mintedAt;
   String? ownerId;
   bool isListed;
+  // Roller-specific metadata (null for non-roller items)
+  final String? rollerId;
+  final String? colorId;
+  final String? colorTier;
+  final int? colorHex;
 
   SerializedItem({
     required this.instanceId,
@@ -138,7 +143,13 @@ class SerializedItem {
     required this.mintedAt,
     this.ownerId,
     this.isListed = false,
+    this.rollerId,
+    this.colorId,
+    this.colorTier,
+    this.colorHex,
   });
+
+  bool get isRollerItem => rollerId != null;
 
   MarketplaceItemType? get itemType => MarketplaceItemType.getById(itemTypeId);
 
@@ -149,6 +160,10 @@ class SerializedItem {
         'mintedAt': mintedAt.toIso8601String(),
         'ownerId': ownerId,
         'isListed': isListed,
+        if (rollerId != null) 'rollerId': rollerId,
+        if (colorId != null) 'colorId': colorId,
+        if (colorTier != null) 'colorTier': colorTier,
+        if (colorHex != null) 'colorHex': colorHex,
       };
 
   factory SerializedItem.fromJson(Map<String, dynamic> json) {
@@ -158,14 +173,20 @@ class SerializedItem {
     } catch (_) {}
 
     return SerializedItem(
-      instanceId: json['instanceId'] ?? '',
+      instanceId: json['instanceId'] ?? json['instance_id'] ?? '',
       itemTypeId: json['itemTypeId'] ?? json['item_type_id'] ?? '',
       rarity: rarity,
       mintedAt: json['mintedAt'] != null
           ? DateTime.tryParse(json['mintedAt']) ?? DateTime.now()
-          : DateTime.now(),
+          : json['minted_at'] != null
+              ? DateTime.tryParse(json['minted_at']) ?? DateTime.now()
+              : DateTime.now(),
       ownerId: json['ownerId'] ?? json['owner_id'],
       isListed: json['isListed'] ?? json['is_listed'] ?? false,
+      rollerId: json['rollerId'] ?? json['roller_id'],
+      colorId: json['colorId'] ?? json['color_id'],
+      colorTier: json['colorTier'] ?? json['color_tier'],
+      colorHex: json['colorHex'] ?? json['color_hex'],
     );
   }
 }
@@ -194,6 +215,8 @@ class MarketplaceListing {
   int get feeGems => (priceGems * feePercent / 100).ceil();
   int get sellerReceives => priceGems - feeGems;
 
+  bool get isRollerItem => item.isRollerItem;
+
   factory MarketplaceListing.fromJson(Map<String, dynamic> json) {
     return MarketplaceListing(
       listingId: json['listingId'] ?? json['listing_id'] ?? '',
@@ -204,7 +227,9 @@ class MarketplaceListing {
       feePercent: (json['feePercent'] ?? json['listing_fee_percent'] ?? 5.0).toDouble(),
       listedAt: json['listedAt'] != null
           ? DateTime.tryParse(json['listedAt']) ?? DateTime.now()
-          : DateTime.now(),
+          : json['listed_at'] != null
+              ? DateTime.tryParse(json['listed_at']) ?? DateTime.now()
+              : DateTime.now(),
       status: json['status'] ?? 'active',
     );
   }

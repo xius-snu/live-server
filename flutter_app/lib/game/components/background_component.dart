@@ -1,7 +1,7 @@
-import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
 import 'package:flutter/material.dart';
+import '../../config/game_config.dart';
 
 /// Renders homebackground.png as a full-screen background.
 /// The image has a built-in wall area that we expose for alignment.
@@ -15,15 +15,8 @@ import 'package:flutter/material.dart';
 class BackgroundComponent extends PositionComponent {
   Sprite? _bgSprite;
 
-  // Wall region in the image (as fraction of image height)
-  static const double wallTopFraction = 0.32;
-  static const double wallBottomFraction = 0.72;
-  // Wall area left/right margins in the image (fraction of image width)
-  static const double wallLeftFraction = 0.0;
-  static const double wallRightFraction = 1.0;
-
   BackgroundComponent({
-    Color ambientTint = const Color(0xFF2A2A4A),
+    Color ambientTint = const Color(kBgFallbackColor),
     required super.size,
   }) {
     position = Vector2.zero();
@@ -47,7 +40,7 @@ class BackgroundComponent extends PositionComponent {
   /// Returns the wall area rect in screen coordinates based on the
   /// current component size. Used by PaintRollerGame to position the wall.
   Rect getWallRect() {
-    final imgAspect = 1080.0 / 2340.0;
+    final imgAspect = kBgImageWidth / kBgImageHeight;
     final screenAspect = size.x / size.y;
 
     double drawW, drawH, drawX, drawY;
@@ -63,10 +56,10 @@ class BackgroundComponent extends PositionComponent {
       drawY = 0;
     }
 
-    final wallTop = drawY + drawH * wallTopFraction;
-    final wallBottom = drawY + drawH * wallBottomFraction;
-    final wallLeft = drawX + drawW * wallLeftFraction;
-    final wallRight = drawX + drawW * wallRightFraction;
+    final wallTop = drawY + drawH * kBgWallTopFraction;
+    final wallBottom = drawY + drawH * kBgWallBottomFraction;
+    final wallLeft = drawX + drawW * kBgWallLeftFraction;
+    final wallRight = drawX + drawW * kBgWallRightFraction;
 
     return Rect.fromLTRB(wallLeft, wallTop, wallRight, wallBottom);
   }
@@ -75,7 +68,7 @@ class BackgroundComponent extends PositionComponent {
   void render(Canvas canvas) {
     if (_bgSprite != null) {
       // Draw the image covering the full screen (cover mode)
-      final imgAspect = 1080.0 / 2340.0;
+      final imgAspect = kBgImageWidth / kBgImageHeight;
       final screenAspect = size.x / size.y;
 
       double drawW, drawH, drawX, drawY;
@@ -100,7 +93,7 @@ class BackgroundComponent extends PositionComponent {
       // Fallback solid color
       canvas.drawRect(
         Rect.fromLTWH(0, 0, size.x, size.y),
-        Paint()..color = const Color(0xFF2A2A4A),
+        Paint()..color = const Color(kBgFallbackColor),
       );
     }
   }

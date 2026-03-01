@@ -1,5 +1,6 @@
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../config/game_config.dart';
 
 enum StripeFillDirection {
   bottomToTop,
@@ -16,8 +17,6 @@ class PaintStripeComponent extends PositionComponent {
   double _animProgress = 0;
   double _age = 0;
   bool _done = false; // skip update once fully dried
-  static const double _animDuration = 0.105;
-  static const double _wetDuration = 0.3;
 
   late final double baseX;
   late final Paint _basePaint;
@@ -37,7 +36,7 @@ class PaintStripeComponent extends PositionComponent {
   }
 
   void quickDry() {
-    _age = _wetDuration;
+    _age = kStripeWetDuration;
   }
 
   @override
@@ -45,9 +44,9 @@ class PaintStripeComponent extends PositionComponent {
     if (_done) return;
     _age += dt;
     if (_animProgress < 1.0) {
-      _animProgress = (_animProgress + dt / _animDuration).clamp(0.0, 1.0);
+      _animProgress = (_animProgress + dt / kStripeFillDuration).clamp(0.0, 1.0);
     }
-    if (_animProgress >= 1.0 && _age >= _wetDuration) {
+    if (_animProgress >= 1.0 && _age >= kStripeWetDuration) {
       _done = true;
     }
   }
@@ -58,22 +57,22 @@ class PaintStripeComponent extends PositionComponent {
     switch (fillDirection) {
       case StripeFillDirection.bottomToTop:
         final h = size.y * _animProgress;
-        if (h < 1) return;
+        if (h < kStripeMinRenderHeight) return;
         paintedRect = Rect.fromLTWH(0, size.y - h, size.x, h);
         break;
       case StripeFillDirection.topToBottom:
         final h = size.y * _animProgress;
-        if (h < 1) return;
+        if (h < kStripeMinRenderHeight) return;
         paintedRect = Rect.fromLTWH(0, 0, size.x, h);
         break;
       case StripeFillDirection.rightToLeft:
         final w = size.x * _animProgress;
-        if (w < 1) return;
+        if (w < kStripeMinRenderHeight) return;
         paintedRect = Rect.fromLTWH(size.x - w, 0, w, size.y);
         break;
       case StripeFillDirection.leftToRight:
         final w = size.x * _animProgress;
-        if (w < 1) return;
+        if (w < kStripeMinRenderHeight) return;
         paintedRect = Rect.fromLTWH(0, 0, w, size.y);
         break;
     }
@@ -81,11 +80,11 @@ class PaintStripeComponent extends PositionComponent {
     canvas.drawRect(paintedRect, _basePaint);
 
     // Wet edge glow — identical to original visual
-    if (_age < _wetDuration && paintedRect.width > 2) {
-      final wetProgress = (_age / _wetDuration).clamp(0.0, 1.0);
-      final glowOpacity = (1.0 - wetProgress * wetProgress) * 0.35;
+    if (_age < kStripeWetDuration && paintedRect.width > 2) {
+      final wetProgress = (_age / kStripeWetDuration).clamp(0.0, 1.0);
+      final glowOpacity = (1.0 - wetProgress * wetProgress) * kStripeGlowOpacityMultiplier;
       if (glowOpacity > 0.01) {
-        final glowWidth = paintedRect.width * 0.3;
+        final glowWidth = paintedRect.width * kStripeGlowWidthFraction;
 
         // Left edge highlight
         final leftRect = Rect.fromLTWH(
@@ -122,7 +121,7 @@ class PaintStripeComponent extends PositionComponent {
         );
 
         // Top edge shimmer
-        final shimmerHeight = paintedRect.height * 0.08;
+        final shimmerHeight = paintedRect.height * kStripeTopShimmerHeightFraction;
         final topRect = Rect.fromLTWH(
           paintedRect.left, paintedRect.top, paintedRect.width, shimmerHeight,
         );
@@ -133,7 +132,7 @@ class PaintStripeComponent extends PositionComponent {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.white.withOpacity(glowOpacity * 0.6),
+                Colors.white.withOpacity(glowOpacity * kStripeTopShimmerOpacityMultiplier),
                 Colors.white.withOpacity(0),
               ],
             ).createShader(topRect),

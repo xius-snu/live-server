@@ -2,7 +2,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/game_config.dart';
 import '../models/player_progress.dart';
+import '../models/roller_inventory_item.dart';
 import '../models/upgrade.dart';
 import '../models/house.dart';
 
@@ -11,15 +13,13 @@ class RollerSkinDef {
   final String id;
   final String name;
   final String asset; // filename in assets/images/rollers/
-  final double price; // coin cost, 0 = free
-  final Color paintColor; // unique paint color for this roller
+  final double price; // coin cost
 
   const RollerSkinDef({
     required this.id,
     required this.name,
     required this.asset,
     required this.price,
-    required this.paintColor,
   });
 }
 
@@ -35,14 +35,14 @@ class GameService extends ChangeNotifier {
   PlayerProgress get progress => _progress;
   bool get initialized => _initialized;
 
-  /// All roller skins in order (least → most cool / expensive).
+  /// All roller skins in order (least -> most expensive).
   static const List<RollerSkinDef> rollerSkinDefs = [
-    RollerSkinDef(id: 'default', name: 'Default', asset: 'default.png', price: 0, paintColor: Color(0xFFFF3B30)),       // bright red
-    RollerSkinDef(id: 'pudding', name: 'Pudding', asset: 'pudding.png', price: 500, paintColor: Color(0xFFFF9500)),     // vivid orange
-    RollerSkinDef(id: 'pancake', name: 'Pancake', asset: 'pancake.png', price: 2000, paintColor: Color(0xFF8B5CF6)),    // soft violet
-    RollerSkinDef(id: 'bunny', name: 'Bunny', asset: 'bunny.png', price: 8000, paintColor: Color(0xFF06B6D4)),          // cyan
-    RollerSkinDef(id: 'kitty', name: 'Kitty', asset: 'kitty.png', price: 25000, paintColor: Color(0xFFF472B6)),         // pastel pink
-    RollerSkinDef(id: 'money', name: 'Money', asset: 'money.png', price: 80000, paintColor: Color(0xFFFFD700)),         // gold
+    RollerSkinDef(id: 'default', name: 'Default', asset: 'default.png', price: kSkinPriceDefault),
+    RollerSkinDef(id: 'pudding', name: 'Pudding', asset: 'pudding.png', price: kSkinPricePudding),
+    RollerSkinDef(id: 'pancake', name: 'Pancake', asset: 'pancake.png', price: kSkinPricePancake),
+    RollerSkinDef(id: 'bunny', name: 'Bunny', asset: 'bunny.png', price: kSkinPriceBunny),
+    RollerSkinDef(id: 'kitty', name: 'Kitty', asset: 'kitty.png', price: kSkinPriceKitty),
+    RollerSkinDef(id: 'money', name: 'Money', asset: 'money.png', price: kSkinPriceMoney),
   ];
 
   // Convenience getters
@@ -56,10 +56,14 @@ class GameService extends ChangeNotifier {
   double get rollerSpeedMultiplier => _progress.rollerSpeedMultiplier;
   int get streak => _progress.streak;
   String get equippedSkin => _progress.equippedSkin;
-  Set<String> get ownedSkins => _progress.ownedSkins;
-  Color get equippedPaintColor =>
-      rollerSkinDefs.firstWhere((s) => s.id == equippedSkin,
-          orElse: () => rollerSkinDefs.first).paintColor;
+  String get equippedColorId => _progress.equippedColorId;
+  List<RollerInventoryItem> get rollerInventory => _progress.rollerInventory;
+
+  Color get equippedPaintColor {
+    final colorDef = getPaintColorById(_progress.equippedColorId);
+    if (colorDef != null) return Color(colorDef.hex);
+    return const Color(kDefaultRollerPaintColor);
+  }
 
   HouseDefinition get currentHouseDef => _progress.currentHouseDef;
   RoomDefinition get currentRoomDef => currentHouseDef.room;
@@ -98,22 +102,22 @@ class GameService extends ChangeNotifier {
 
   /// Coverage bonus multiplier for high coverage rounds.
   static double coverageBonus(double coverage) {
-    if (coverage >= 1.0) return 3.0;   // 100% = 3x
-    if (coverage >= 0.95) return 2.0;  // 95%+ = 2x
-    if (coverage >= 0.90) return 1.5;  // 90%+ = 1.5x
+    if (coverage >= 1.0) return kCoverageBonusPerfect;
+    if (coverage >= 0.95) return kCoverageBonusGreat;
+    if (coverage >= 0.90) return kCoverageBonusNice;
     return 1.0;
   }
 
   /// Streak cash bonus multiplier. 5% per streak level, uncapped.
   static double streakBonusMultiplier(int streak) {
-    return 0.05 * streak;
+    return kStreakBonusPerLevel * streak;
   }
 
   /// Complete a paint round. Returns (basePayout, streakBonus).
   (double payout, double streakBonus) completePaintRound(double coverage) {
     final baseCash = _progress.baseCashPerWall;
 
-    final coverageFactor = pow(coverage.clamp(0.0, 1.0), 1.5).toDouble();
+    final coverageFactor = pow(coverage.clamp(0.0, 1.0), kCoverageRewardExponent).toDouble();
     final bonus = coverageBonus(coverage.clamp(0.0, 1.0));
 
     final basePayout = baseCash *
@@ -121,18 +125,18 @@ class GameService extends ChangeNotifier {
         bonus *
         _progress.cashPerTapMultiplier;
 
-    // Tiered streak system (max 10):
-    // - 2x+ (GREAT/PERFECT): advances up to streak 10
-    // - 1.5x (NICE): advances up to streak 7, drops to 7 if above
+    // Tiered streak system:
+    // - 2x+ (GREAT/PERFECT): advances up to streak max
+    // - 1.5x (NICE): advances up to streak nice cap, drops to cap if above
     // - No bonus: resets to 0
     final oldStreak = _progress.streak;
-    if (bonus >= 2.0) {
-      _progress.streak = (oldStreak + 1).clamp(0, 10);
-    } else if (bonus >= 1.5) {
-      if (oldStreak < 7) {
+    if (bonus >= kCoverageBonusGreat) {
+      _progress.streak = (oldStreak + 1).clamp(0, kStreakMaxLevel);
+    } else if (bonus >= kCoverageBonusNice) {
+      if (oldStreak < kStreakNiceCap) {
         _progress.streak = oldStreak + 1;
       } else {
-        _progress.streak = 7;
+        _progress.streak = kStreakNiceCap;
       }
     } else {
       _progress.streak = 0;
@@ -153,11 +157,6 @@ class GameService extends ChangeNotifier {
     _saveLocally();
     notifyListeners();
     return (basePayout, streakCashBonus);
-  }
-
-  /// With one room per house, completing a wall completes the house.
-  bool advanceRoom() {
-    return true;
   }
 
   /// Purchase an upgrade. Returns true if successful.
@@ -243,8 +242,7 @@ class GameService extends ChangeNotifier {
   double applyIdleIncome(Duration offlineDuration) {
     if (_progress.idleIncomePerSecond <= 0) return 0;
 
-    // Cap at 8 hours
-    final cappedSeconds = offlineDuration.inSeconds.clamp(0, 8 * 3600);
+    final cappedSeconds = offlineDuration.inSeconds.clamp(0, kIdleIncomeCapSeconds);
     final income = _progress.idleIncomePerSecond * cappedSeconds;
 
     if (income > 0) {
@@ -267,38 +265,75 @@ class GameService extends ChangeNotifier {
     return DateTime.now().difference(_progress.lastOnlineAt);
   }
 
-  // ── Roller Skins ──
+  // ── Roller Purchase & Equip ──
 
-  bool ownsSkin(String id) => _progress.ownedSkins.contains(id);
-
-  bool canAffordSkin(String id) {
-    final def = rollerSkinDefs.where((s) => s.id == id).firstOrNull;
+  bool canAffordRollerPurchase(String rollerId) {
+    final def = rollerSkinDefs.where((s) => s.id == rollerId).firstOrNull;
     if (def == null) return false;
     return _progress.cash >= def.price;
   }
 
-  /// Purchase a roller skin. Returns true if successful.
-  bool purchaseSkin(String skinId) {
-    if (ownsSkin(skinId)) return false;
-    final def = rollerSkinDefs.where((s) => s.id == skinId).firstOrNull;
-    if (def == null) return false;
-    if (_progress.cash < def.price) return false;
+  /// Purchase a roller, rolling a random color. Returns the item or null.
+  RollerInventoryItem? purchaseRoller(String rollerId) {
+    final def = rollerSkinDefs.where((s) => s.id == rollerId).firstOrNull;
+    if (def == null) return null;
+    if (_progress.cash < def.price) return null;
 
     _progress.cash -= def.price;
-    _progress.ownedSkins.add(skinId);
-    _progress.equippedSkin = skinId;
+
+    final color = rollRandomPaintColor(_rng);
+
+    // Stack if same roller+color exists
+    final existing = _progress.rollerInventory.where(
+      (item) => item.rollerId == rollerId && item.colorId == color.id,
+    ).firstOrNull;
+
+    RollerInventoryItem resultItem;
+    if (existing != null) {
+      existing.count++;
+      resultItem = existing;
+    } else {
+      resultItem = RollerInventoryItem(
+        rollerId: rollerId,
+        colorId: color.id,
+        colorTier: color.tier,
+        colorHex: color.hex,
+      );
+      _progress.rollerInventory.add(resultItem);
+    }
+
+    _saveLocally();
+    notifyListeners();
+    return resultItem;
+  }
+
+  /// Equip a specific roller+color from inventory.
+  void equipRollerItem(String rollerId, String colorId) {
+    final exists = _progress.rollerInventory.any(
+      (item) => item.rollerId == rollerId && item.colorId == colorId && item.count > 0,
+    );
+    if (!exists) return;
+
+    _progress.equippedSkin = rollerId;
+    _progress.equippedColorId = colorId;
+    _saveLocally();
+    notifyListeners();
+  }
+
+  /// Remove one copy of a roller+color from inventory. Returns true if successful.
+  bool removeRollerItem(String rollerId, String colorId) {
+    final item = _progress.rollerInventory.where(
+      (i) => i.rollerId == rollerId && i.colorId == colorId && i.count > 0,
+    ).firstOrNull;
+    if (item == null) return false;
+
+    item.count--;
+    if (item.count <= 0) {
+      _progress.rollerInventory.remove(item);
+    }
     _saveLocally();
     notifyListeners();
     return true;
-  }
-
-  /// Equip an already-owned skin.
-  void equipSkin(String skinId) {
-    if (!ownsSkin(skinId)) return;
-    if (_progress.equippedSkin == skinId) return;
-    _progress.equippedSkin = skinId;
-    _saveLocally();
-    notifyListeners();
   }
 
   /// Add debug coins without affecting leaderboard stats.

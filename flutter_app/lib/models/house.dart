@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../config/game_config.dart';
 
 /// 7 house types that cycle infinitely with increasing levels.
 /// Each house type has a distinct wall color and a base wall scale.
@@ -56,7 +57,7 @@ class HouseDefinition {
   /// Wall scale for a given cycle level (kept for reference but not used
   /// for actual wall sizing — use wallScaleForHouseLevel instead).
   double wallScaleForLevel(int level) {
-    return baseWallScale * (1.0 + 0.12 * (level - 1));
+    return baseWallScale * (1.0 + kHouseWallScalePerCycle * (level - 1));
   }
 
   /// Convert integer to Roman numeral string.
@@ -201,7 +202,7 @@ class HouseDefinition {
   /// the previous. Growth = 5% per level compounding.
   /// Level 1 = 1.0, Level 7 (Mansion I) ≈ 1.34, Level 8 (Dirt House II) ≈ 1.41, etc.
   static double wallScaleForHouseLevel(int houseLevel) {
-    return 1.0 * _pow(1.05, houseLevel - 1);
+    return 1.0 * _pow(kHouseWallScaleGrowth, houseLevel - 1);
   }
 
 
@@ -215,19 +216,19 @@ class HouseDefinition {
   /// Base cash per wall scales with house level.
   /// Higher house level = more cash reward.
   static double baseCashForHouseLevel(int houseLevel) {
-    return 10.0 * (1.0 + 0.3 * (houseLevel - 1));
+    return kHouseBaseCash * (1.0 + kHouseCashGrowthPerLevel * (houseLevel - 1));
   }
 
   /// Cost to upgrade to the next house level.
-  /// Gentle exponential: base 40, multiplier 1.35x per level.
+  /// Gentle exponential: base cost * multiplier per level.
   static double houseUpgradeCost(int currentHouseLevel) {
-    return (40.0 * _pow(1.35, currentHouseLevel - 1)).roundToDouble();
+    return (kHouseUpgradeBaseCost * _pow(kHouseUpgradeCostMultiplier, currentHouseLevel - 1)).roundToDouble();
   }
 
   /// Cost to upgrade roller size to the next level.
-  /// Gentle exponential: base 30, multiplier 1.30x per level.
+  /// Gentle exponential: base cost * multiplier per level.
   static double rollerUpgradeCost(int currentRollerLevel) {
-    return (30.0 * _pow(1.30, currentRollerLevel)).roundToDouble();
+    return (kRollerUpgradeBaseCost * _pow(kRollerUpgradeCostMultiplier, currentRollerLevel)).roundToDouble();
   }
 
   static double _pow(double base, int exp) {
@@ -239,7 +240,7 @@ class HouseDefinition {
   }
 
   /// Max allowed level difference between house level and roller level.
-  static const int maxLevelDiff = 10;
+  static const int maxLevelDiff = kMaxHouseRollerLevelDiff;
 
   /// Check if player can upgrade house level given current roller level.
   static bool canUpgradeHouse(int currentHouseLevel, int rollerLevel) {
@@ -256,11 +257,11 @@ class HouseDefinition {
   /// 25% of the wall per stroke — making 6 strokes give ~80-90% coverage
   /// with good placement (comfortable but not trivial).
   ///
-  /// Formula: base 0.25 raw width, +1.5% per roller level, divided by wall scale.
+  /// Formula: base raw width, +1.5% per roller level, divided by wall scale.
   static double rollerWidthPercent(int rollerLevel, int houseLevel) {
-    final rawWidth = 0.25 + 0.015 * rollerLevel;
+    final rawWidth = kRollerRawBaseWidth + kRollerWidthPerLevel * rollerLevel;
     final wallScale = wallScaleForHouseLevel(houseLevel);
-    return (rawWidth / wallScale).clamp(0.05, 0.95);
+    return (rawWidth / wallScale).clamp(kRollerMinWidthFraction, kRollerMaxWidthFraction);
   }
 
   // ---------------------------------------------------------------------------
@@ -269,15 +270,10 @@ class HouseDefinition {
   // derived from the fraction of wall width it covers.
   // ---------------------------------------------------------------------------
 
-  /// Base wall width in meters at scale 1.0.
-  static const double _baseWallWidthM = 3.2; // ~3.2m wide
-  /// Base wall height in meters at scale 1.0.
-  static const double _baseWallHeightM = 3.0; // ~3.0m tall
-
   /// Absolute wall area in m² for a given house level.
   static double wallAreaM2(int houseLevel) {
     final scale = wallScaleForHouseLevel(houseLevel);
-    return _baseWallWidthM * scale * _baseWallHeightM * scale;
+    return kBaseWallWidthMeters * scale * kBaseWallHeightMeters * scale;
   }
 
   /// Display wall area, e.g. "10m²", "46m²".
@@ -289,7 +285,7 @@ class HouseDefinition {
   /// Absolute roller width in meters for a given roller level + house level.
   static double rollerWidthM(int rollerLevel, int houseLevel) {
     final scale = wallScaleForHouseLevel(houseLevel);
-    final wallWidth = _baseWallWidthM * scale;
+    final wallWidth = kBaseWallWidthMeters * scale;
     final fraction = rollerWidthPercent(rollerLevel, houseLevel);
     return wallWidth * fraction;
   }
@@ -300,30 +296,25 @@ class HouseDefinition {
     return '${m.toStringAsFixed(2)}m';
   }
 
-  /// Weights for up to 7 most-recent tiers.
-  /// Index 0 = most recently unlocked (highest prob), index 6 = 7th back.
-  /// Sum = 100 when all 7 are used.
-  static const List<int> _tierWeights = [18, 17, 16, 14, 13, 12, 10];
-
   /// Pick a random house level from the most-recent tier pool.
   /// Returns a houseLevel in [max(1, maxHouseLevel-6) .. maxHouseLevel].
   static int randomWeightedHouseLevel(int maxHouseLevel, Random rng) {
     if (maxHouseLevel <= 1) return 1;
 
     // Build pool: up to 7 most recent levels
-    final poolSize = maxHouseLevel.clamp(1, _tierWeights.length);
+    final poolSize = maxHouseLevel.clamp(1, kTierWeights.length);
     final startLevel = maxHouseLevel - poolSize + 1; // inclusive
 
     // Sum weights for this pool size
     int totalWeight = 0;
     for (int i = 0; i < poolSize; i++) {
-      totalWeight += _tierWeights[i];
+      totalWeight += kTierWeights[i];
     }
 
     // Roll
     int roll = rng.nextInt(totalWeight);
     for (int i = 0; i < poolSize; i++) {
-      roll -= _tierWeights[i];
+      roll -= kTierWeights[i];
       if (roll < 0) {
         // i=0 → most recent (maxHouseLevel), i=1 → second most recent, etc.
         return maxHouseLevel - i;

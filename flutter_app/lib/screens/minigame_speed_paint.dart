@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../models/minigame_leaderboard_entry.dart';
+import '../theme/app_colors.dart';
 
 class SpeedPaintMinigame extends StatefulWidget {
   const SpeedPaintMinigame({super.key});
@@ -11,8 +13,8 @@ class SpeedPaintMinigame extends StatefulWidget {
 
 class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
     with TickerProviderStateMixin {
-  static const _accentColor = Color(0xFFE8734A);
-  static const _bgColor = Color(0xFF1A1A2E);
+  static const _accentColor = AppColors.primary;
+  static const _bgColor = AppColors.minigameBg;
   static const _gameDuration = 60;
 
   final _random = Random();
@@ -34,7 +36,7 @@ class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
   int _personalBest = 0;
 
   // Leaderboard
-  late List<_LeaderboardEntry> _leaderboard;
+  late List<MinigameLeaderboardEntry> _leaderboard;
 
   @override
   void initState() {
@@ -48,13 +50,13 @@ class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
     super.dispose();
   }
 
-  List<_LeaderboardEntry> _generateFakeLeaderboard() {
+  List<MinigameLeaderboardEntry> _generateFakeLeaderboard() {
     return [
-      _LeaderboardEntry('PaintMaster99', 18),
-      _LeaderboardEntry('SpeedDemon', 15),
-      _LeaderboardEntry('RollerKing', 13),
-      _LeaderboardEntry('WallSmasher', 11),
-      _LeaderboardEntry('QuickBrush', 9),
+      MinigameLeaderboardEntry('PaintMaster99', 18),
+      MinigameLeaderboardEntry('SpeedDemon', 15),
+      MinigameLeaderboardEntry('RollerKing', 13),
+      MinigameLeaderboardEntry('WallSmasher', 11),
+      MinigameLeaderboardEntry('QuickBrush', 9),
     ];
   }
 
@@ -102,7 +104,7 @@ class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
       }
       // Insert player into leaderboard
       _leaderboard = _generateFakeLeaderboard();
-      _leaderboard.add(_LeaderboardEntry('You', _wallsCompleted));
+      _leaderboard.add(MinigameLeaderboardEntry('You', _wallsCompleted));
       _leaderboard.sort((a, b) => b.score.compareTo(a.score));
       if (_leaderboard.length > 6) {
         _leaderboard = _leaderboard.sublist(0, 6);
@@ -286,7 +288,7 @@ class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A40),
+                  color: AppColors.minigameWallBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: _accentColor.withOpacity(0.3),
@@ -368,7 +370,7 @@ class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
             margin: const EdgeInsets.all(24),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF222240),
+              color: AppColors.minigameCardBg,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: _accentColor, width: 2),
             ),
@@ -588,10 +590,4 @@ class _SpeedPaintMinigameState extends State<SpeedPaintMinigame>
       ),
     );
   }
-}
-
-class _LeaderboardEntry {
-  final String name;
-  final int score;
-  _LeaderboardEntry(this.name, this.score);
 }

@@ -26,6 +26,7 @@ class ShopItem {
 class MarketplaceService extends ChangeNotifier {
   String baseUrl;
   String? Function() userIdGetter;
+  Map<String, String> Function() authHeadersGetter;
 
   List<SerializedItem> _inventory = [];
   List<MarketplaceListing> _communityListings = [];
@@ -33,7 +34,11 @@ class MarketplaceService extends ChangeNotifier {
   bool _loading = false;
   String? _error;
 
-  MarketplaceService({required this.baseUrl, required this.userIdGetter});
+  MarketplaceService({
+    required this.baseUrl,
+    required this.userIdGetter,
+    Map<String, String> Function()? authHeadersGetter,
+  }) : authHeadersGetter = authHeadersGetter ?? (() => {'Content-Type': 'application/json'});
 
   List<SerializedItem> get inventory => _inventory;
   List<SerializedItem> get unlistedInventory =>
@@ -99,6 +104,7 @@ class MarketplaceService extends ChangeNotifier {
     try {
       final res = await http.get(
         Uri.parse('$baseUrl/api/inventory/$_userId'),
+        headers: authHeadersGetter(),
       );
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -151,7 +157,7 @@ class MarketplaceService extends ChangeNotifier {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/api/marketplace/buy'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeadersGetter(),
         body: json.encode({
           'userId': _userId,
           'listingId': listingId,
@@ -175,7 +181,7 @@ class MarketplaceService extends ChangeNotifier {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/api/marketplace/list'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeadersGetter(),
         body: json.encode({
           'userId': _userId,
           'instanceId': instanceId,
@@ -200,7 +206,7 @@ class MarketplaceService extends ChangeNotifier {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/api/marketplace/cancel'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeadersGetter(),
         body: json.encode({
           'userId': _userId,
           'listingId': listingId,
@@ -222,5 +228,40 @@ class MarketplaceService extends ChangeNotifier {
     final uid = _userId;
     if (uid == null) return [];
     return _communityListings.where((l) => l.sellerId == uid).toList();
+  }
+
+  /// List a roller+color item from local inventory onto the marketplace.
+  Future<String?> listRollerItem({
+    required String rollerId,
+    required String colorId,
+    required int priceGems,
+    required double feePercent,
+    required String colorTier,
+    required int colorHex,
+  }) async {
+    if (_userId == null) return 'Not logged in';
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/marketplace/list-roller'),
+        headers: authHeadersGetter(),
+        body: json.encode({
+          'userId': _userId,
+          'rollerId': rollerId,
+          'colorId': colorId,
+          'colorTier': colorTier,
+          'colorHex': colorHex,
+          'priceStars': priceGems,
+          'feePercent': feePercent,
+        }),
+      );
+      final data = json.decode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) {
+        await loadAll();
+        return null;
+      }
+      return data['error'] ?? 'Listing failed';
+    } catch (e) {
+      return 'Network error: $e';
+    }
   }
 }

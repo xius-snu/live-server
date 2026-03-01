@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../models/minigame_leaderboard_entry.dart';
+import '../theme/app_colors.dart';
 
 class BullseyeMinigame extends StatefulWidget {
   const BullseyeMinigame({super.key});
@@ -9,10 +11,9 @@ class BullseyeMinigame extends StatefulWidget {
   State<BullseyeMinigame> createState() => _BullseyeMinigameState();
 }
 
-class _BullseyeMinigameState extends State<BullseyeMinigame>
-    with SingleTickerProviderStateMixin {
-  static const _accentColor = Color(0xFF3B82F6);
-  static const _bgColor = Color(0xFF1A1A2E);
+class _BullseyeMinigameState extends State<BullseyeMinigame> {
+  static const _accentColor = AppColors.upgradeRoller;
+  static const _bgColor = AppColors.minigameBg;
   static const _totalRounds = 5;
 
   final _random = Random();
@@ -38,7 +39,7 @@ class _BullseyeMinigameState extends State<BullseyeMinigame>
   int _personalBest = 0;
 
   // Leaderboard
-  late List<_LeaderboardEntry> _leaderboard;
+  late List<MinigameLeaderboardEntry> _leaderboard;
 
   @override
   void initState() {
@@ -52,13 +53,13 @@ class _BullseyeMinigameState extends State<BullseyeMinigame>
     super.dispose();
   }
 
-  List<_LeaderboardEntry> _generateFakeLeaderboard() {
+  List<MinigameLeaderboardEntry> _generateFakeLeaderboard() {
     return [
-      _LeaderboardEntry('SniperPaint', 472),
-      _LeaderboardEntry('PrecisionPro', 445),
-      _LeaderboardEntry('BullseyeBoss', 420),
-      _LeaderboardEntry('SharpShooter', 398),
-      _LeaderboardEntry('AccuratePainter', 375),
+      MinigameLeaderboardEntry('SniperPaint', 472),
+      MinigameLeaderboardEntry('PrecisionPro', 445),
+      MinigameLeaderboardEntry('BullseyeBoss', 420),
+      MinigameLeaderboardEntry('SharpShooter', 398),
+      MinigameLeaderboardEntry('AccuratePainter', 375),
     ];
   }
 
@@ -135,7 +136,7 @@ class _BullseyeMinigameState extends State<BullseyeMinigame>
         _personalBest = _totalScore;
       }
       _leaderboard = _generateFakeLeaderboard();
-      _leaderboard.add(_LeaderboardEntry('You', _totalScore));
+      _leaderboard.add(MinigameLeaderboardEntry('You', _totalScore));
       _leaderboard.sort((a, b) => b.score.compareTo(a.score));
       if (_leaderboard.length > 6) {
         _leaderboard = _leaderboard.sublist(0, 6);
@@ -307,7 +308,7 @@ class _BullseyeMinigameState extends State<BullseyeMinigame>
                   height: 40,
                   margin: const EdgeInsets.only(top: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A40),
+                    color: AppColors.minigameWallBg,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _accentColor.withOpacity(0.3),
@@ -587,7 +588,7 @@ class _BullseyeMinigameState extends State<BullseyeMinigame>
             margin: const EdgeInsets.all(24),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF222240),
+              color: AppColors.minigameCardBg,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: _accentColor, width: 2),
             ),
@@ -860,10 +861,4 @@ class _BullseyeMinigameState extends State<BullseyeMinigame>
       ),
     );
   }
-}
-
-class _LeaderboardEntry {
-  final String name;
-  final int score;
-  _LeaderboardEntry(this.name, this.score);
 }

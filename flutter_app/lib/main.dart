@@ -10,6 +10,7 @@ import 'services/marketplace_service.dart';
 import 'services/event_service.dart';
 import 'services/leaderboard_service.dart';
 import 'services/guild_service.dart';
+import 'theme/app_colors.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,18 +35,26 @@ class PaintRollerApp extends StatelessWidget {
             baseUrl: 'https://live-server-4c3n.onrender.com',
             userIdGetter: () => null,
           ),
-          update: (_, user, prev) => prev!
-            ..baseUrl = user.baseUrl
-            ..userIdGetter = () => user.userId,
+          update: (_, user, prev) {
+            final svc = prev!;
+            svc.baseUrl = user.baseUrl;
+            svc.userIdGetter = () => user.userId;
+            svc.authHeadersGetter = () => user.authHeaders;
+            return svc;
+          },
         ),
         ChangeNotifierProxyProvider<UserService, EventService>(
           create: (_) => EventService(
             baseUrl: 'https://live-server-4c3n.onrender.com',
             userIdGetter: () => null,
           ),
-          update: (_, user, prev) => prev!
-            ..baseUrl = user.baseUrl
-            ..userIdGetter = () => user.userId,
+          update: (_, user, prev) {
+            final svc = prev!;
+            svc.baseUrl = user.baseUrl;
+            svc.userIdGetter = () => user.userId;
+            svc.authHeadersGetter = () => user.authHeaders;
+            return svc;
+          },
         ),
         ChangeNotifierProxyProvider<UserService, LeaderboardService>(
           create: (ctx) => LeaderboardService(
@@ -58,12 +67,12 @@ class PaintRollerApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Rich Roller, Poor Roller',
         theme: ThemeData.dark().copyWith(
-          scaffoldBackgroundColor: const Color(0xFFE8D5B8),
+          scaffoldBackgroundColor: AppColors.background,
           textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
           colorScheme: const ColorScheme.dark(
-            primary: Color(0xFFE8734A),
-            secondary: Color(0xFF4ADE80),
-            surface: Color(0xFFE8D5B8),
+            primary: AppColors.primary,
+            secondary: AppColors.secondary,
+            surface: AppColors.background,
           ),
           appBarTheme: const AppBarTheme(
             backgroundColor: Colors.transparent,
@@ -85,39 +94,93 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with SingleTickerProviderStateMixin {
   bool _initialized = false;
   bool _splashDone = false;
+  late final AnimationController _progressController;
 
   @override
   void initState() {
     super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _init());
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) setState(() => _splashDone = true);
-    });
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
     final userService = Provider.of<UserService>(context, listen: false);
     final gameService = Provider.of<GameService>(context, listen: false);
 
+    // Start progress animation and init in parallel
+    _progressController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _progressController.forward();
     await userService.init();
     await gameService.init();
-
     setState(() => _initialized = true);
+
+    // Wait for progress bar to finish if still animating
+    if (_progressController.isAnimating) {
+      await _progressController.forward().orCancel.catchError((_) {});
+    }
+    if (mounted) setState(() => _splashDone = true);
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_initialized || !_splashDone) {
+      final progress = _progressController.value;
+      final percent = (progress * 100).toInt();
       return Scaffold(
-        backgroundColor: const Color(0xFFE8D5B8),
-        body: SizedBox.expand(
-          child: Image.asset(
-            'assets/images/loadingscreen.png',
-            fit: BoxFit.cover,
-          ),
+        backgroundColor: AppColors.background,
+        body: Stack(
+          children: [
+            SizedBox.expand(
+              child: Image.asset(
+                'assets/images/loadingscreen.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 36,
+              child: Stack(
+                children: [
+                  // Background bar
+                  Container(color: AppColors.hudDark),
+                  // Progress fill
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: progress,
+                    child: Container(color: AppColors.primary),
+                  ),
+                  // Percent text
+                  Center(
+                    child: Text(
+                      '$percent%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -159,7 +222,7 @@ class _UsernameSetupScreenState extends State<_UsernameSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8D5B8),
+      backgroundColor: AppColors.background,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -171,7 +234,7 @@ class _UsernameSetupScreenState extends State<_UsernameSetupScreen> {
               const Text(
                 'Rich Roller, Poor Roller',
                 style: TextStyle(
-                  color: Color(0xFF6B5038),
+                  color: AppColors.brownDark,
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 2,
@@ -180,29 +243,29 @@ class _UsernameSetupScreenState extends State<_UsernameSetupScreen> {
               const SizedBox(height: 8),
               Text(
                 'Choose your painter name',
-                style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6)),
+                style: TextStyle(color: AppColors.brownDark.withOpacity(0.6)),
               ),
               const SizedBox(height: 32),
               TextField(
                 controller: _controller,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF6B5038), fontSize: 18),
+                style: const TextStyle(color: AppColors.brownDark, fontSize: 18),
                 decoration: InputDecoration(
                   hintText: 'Enter username',
-                  hintStyle: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.3)),
+                  hintStyle: TextStyle(color: AppColors.brownDark.withOpacity(0.3)),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: const Color(0xFFD5C4A8)),
+                    borderSide: BorderSide(color: AppColors.inputBorder),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: const Color(0xFFD5C4A8)),
+                    borderSide: BorderSide(color: AppColors.inputBorder),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFE8734A)),
+                    borderSide: const BorderSide(color: AppColors.primary),
                   ),
                 ),
                 onSubmitted: (_) => _submit(),
@@ -213,7 +276,7 @@ class _UsernameSetupScreenState extends State<_UsernameSetupScreen> {
                 child: ElevatedButton(
                   onPressed: _loading ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE8734A),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(

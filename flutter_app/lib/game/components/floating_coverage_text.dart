@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../config/game_config.dart';
 
 /// Floating text showing coverage %. Cached layout, only opacity changes per frame.
 class FloatingCoverageText extends PositionComponent {
@@ -8,8 +9,6 @@ class FloatingCoverageText extends PositionComponent {
   final Color color;
   final int comboCount;
   double _life = 0;
-  static const double _totalLife = 1.0;
-  static const double _riseSpeed = 60.0;
 
   late final double baseX;
   // Cached at creation — layout never changes
@@ -28,15 +27,15 @@ class FloatingCoverageText extends PositionComponent {
     baseX = position.x;
 
     _comboScale = comboCount >= 5
-        ? 1.25
+        ? kCoverageTextHighComboScale
         : comboCount >= 3
-            ? 1.12
+            ? kCoverageTextMedComboScale
             : 1.0;
 
     _mainColor = comboCount >= 5
-        ? Color.lerp(color, const Color(0xFFFFD700), 0.7)!
+        ? Color.lerp(color, const Color(0xFFFFD700), kCoverageTextHighComboTint)!
         : comboCount >= 3
-            ? Color.lerp(color, const Color(0xFFFFA500), 0.4)!
+            ? Color.lerp(color, const Color(0xFFFFA500), kCoverageTextMedComboTint)!
             : color;
 
     // Pre-layout text once
@@ -60,31 +59,31 @@ class FloatingCoverageText extends PositionComponent {
   void update(double dt) {
     super.update(dt);
     _life += dt;
-    if (_life >= _totalLife) {
+    if (_life >= kCoverageTextLifetime) {
       removeFromParent();
       return;
     }
-    position.y -= _riseSpeed * dt;
+    position.y -= kCoverageTextRiseSpeed * dt;
   }
 
   @override
   void render(Canvas canvas) {
-    final t = (_life / _totalLife).clamp(0.0, 1.0);
+    final t = (_life / kCoverageTextLifetime).clamp(0.0, 1.0);
 
     double scale;
     double opacity;
 
-    if (t < 0.15) {
-      final p = t / 0.15;
+    if (t < kCoverageTextBounceInPhase) {
+      final p = t / kCoverageTextBounceInPhase;
       scale = p < 0.7 ? (p / 0.7) * 1.1 : 1.1 - 0.1 * ((p - 0.7) / 0.3);
       opacity = p.clamp(0.0, 1.0);
-    } else if (t < 0.55) {
-      final p = (t - 0.15) / 0.4;
+    } else if (t < kCoverageTextIdlePhaseEnd) {
+      final p = (t - kCoverageTextBounceInPhase) / kCoverageTextIdleOscillation;
       scale = 1.0 + 0.03 * sin(p * pi);
       opacity = 1.0;
     } else {
-      final p = (t - 0.55) / 0.45;
-      scale = 1.0 - 0.15 * p;
+      final p = (t - kCoverageTextIdlePhaseEnd) / kCoverageTextFadeOutDuration;
+      scale = 1.0 - kCoverageTextFadeScaleDown * p;
       opacity = (1.0 - p * p).clamp(0.0, 1.0);
     }
 

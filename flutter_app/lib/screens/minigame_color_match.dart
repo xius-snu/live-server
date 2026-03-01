@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../models/minigame_leaderboard_entry.dart';
+import '../theme/app_colors.dart';
 
 class ColorMatchMinigame extends StatefulWidget {
   const ColorMatchMinigame({super.key});
@@ -9,10 +11,9 @@ class ColorMatchMinigame extends StatefulWidget {
   State<ColorMatchMinigame> createState() => _ColorMatchMinigameState();
 }
 
-class _ColorMatchMinigameState extends State<ColorMatchMinigame>
-    with SingleTickerProviderStateMixin {
-  static const _accentColor = Color(0xFFA855F7);
-  static const _bgColor = Color(0xFF1A1A2E);
+class _ColorMatchMinigameState extends State<ColorMatchMinigame> {
+  static const _accentColor = AppColors.purpleAccent;
+  static const _bgColor = AppColors.minigameBg;
   static const _startingColors = 3;
   static const _maxColors = 8;
 
@@ -58,7 +59,7 @@ class _ColorMatchMinigameState extends State<ColorMatchMinigame>
   int _personalBest = 0;
 
   // Leaderboard
-  late List<_LeaderboardEntry> _leaderboard;
+  late List<MinigameLeaderboardEntry> _leaderboard;
 
   @override
   void initState() {
@@ -72,13 +73,13 @@ class _ColorMatchMinigameState extends State<ColorMatchMinigame>
     super.dispose();
   }
 
-  List<_LeaderboardEntry> _generateFakeLeaderboard() {
+  List<MinigameLeaderboardEntry> _generateFakeLeaderboard() {
     return [
-      _LeaderboardEntry('MemoryMaster', 8),
-      _LeaderboardEntry('ColorGenius', 7),
-      _LeaderboardEntry('PaintPro', 6),
-      _LeaderboardEntry('RainbowKing', 5),
-      _LeaderboardEntry('PatternWiz', 4),
+      MinigameLeaderboardEntry('MemoryMaster', 8),
+      MinigameLeaderboardEntry('ColorGenius', 7),
+      MinigameLeaderboardEntry('PaintPro', 6),
+      MinigameLeaderboardEntry('RainbowKing', 5),
+      MinigameLeaderboardEntry('PatternWiz', 4),
     ];
   }
 
@@ -198,7 +199,7 @@ class _ColorMatchMinigameState extends State<ColorMatchMinigame>
         _personalBest = _highestRound;
       }
       _leaderboard = _generateFakeLeaderboard();
-      _leaderboard.add(_LeaderboardEntry('You', _highestRound));
+      _leaderboard.add(MinigameLeaderboardEntry('You', _highestRound));
       _leaderboard.sort((a, b) => b.score.compareTo(a.score));
       if (_leaderboard.length > 6) {
         _leaderboard = _leaderboard.sublist(0, 6);
@@ -368,7 +369,7 @@ class _ColorMatchMinigameState extends State<ColorMatchMinigame>
             height: 100,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2A40),
+              color: AppColors.minigameWallBg,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _accentColor.withOpacity(0.3),
@@ -600,7 +601,7 @@ class _ColorMatchMinigameState extends State<ColorMatchMinigame>
             margin: const EdgeInsets.all(24),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF222240),
+              color: AppColors.minigameCardBg,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: _accentColor, width: 2),
             ),
@@ -821,10 +822,4 @@ class _ColorMatchMinigameState extends State<ColorMatchMinigame>
       ),
     );
   }
-}
-
-class _LeaderboardEntry {
-  final String name;
-  final int score;
-  _LeaderboardEntry(this.name, this.score);
 }

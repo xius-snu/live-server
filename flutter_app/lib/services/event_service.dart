@@ -75,13 +75,18 @@ class EventReward {
 class EventService extends ChangeNotifier {
   String baseUrl;
   String? Function() userIdGetter;
+  Map<String, String> Function() authHeadersGetter;
 
   List<EventData> _events = [];
   Map<String, int> _attemptsUsed = {}; // eventId -> attempts used
   bool _loading = false;
   Timer? _refreshTimer;
 
-  EventService({required this.baseUrl, required this.userIdGetter});
+  EventService({
+    required this.baseUrl,
+    required this.userIdGetter,
+    Map<String, String> Function()? authHeadersGetter,
+  }) : authHeadersGetter = authHeadersGetter ?? (() => {'Content-Type': 'application/json'});
 
   List<EventData> get events => _events;
   List<EventData> get activeEvents => _events.where((e) => e.isActive).toList();
@@ -133,7 +138,7 @@ class EventService extends ChangeNotifier {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/api/events/$eventId/attempt'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeadersGetter(),
         body: json.encode({
           'userId': _userId,
           'coveragePercent': coveragePercent,

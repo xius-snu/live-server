@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import '../../config/game_config.dart';
 
 /// A single paint splat particle. Pre-allocates Paint objects to avoid GC churn.
 class PaintSplatParticle extends PositionComponent {
@@ -11,7 +12,6 @@ class PaintSplatParticle extends PositionComponent {
   final double _maxLife;
   final double _radius;
   final bool _isBlob;
-  static const double _gravity = 500.0;
 
   // Pre-allocated paints
   final Paint _mainPaint = Paint();
@@ -32,7 +32,7 @@ class PaintSplatParticle extends PositionComponent {
         _maxLife = life,
         _radius = radius,
         _isBlob = isBlob,
-        _hasHighlight = radius > 3,
+        _hasHighlight = radius > kSplatHighlightMinRadius,
         super(size: Vector2(radius * 2, radius * 2));
 
   @override
@@ -43,26 +43,26 @@ class PaintSplatParticle extends PositionComponent {
       removeFromParent();
       return;
     }
-    _vy += _gravity * dt;
+    _vy += kSplatGravity * dt;
     position.x += _vx * dt;
     position.y += _vy * dt;
-    _vx *= 0.97;
+    _vx *= kSplatVelocityDamping;
   }
 
   @override
   void render(Canvas canvas) {
     final progress = 1.0 - (_life / _maxLife);
     final opacity = (1.0 - progress * progress).clamp(0.0, 1.0);
-    final scale = _isBlob ? 1.0 + progress * 0.3 : 1.0 - progress * 0.5;
+    final scale = _isBlob ? 1.0 + progress * kSplatBlobGrowth : 1.0 - progress * kSplatSmallShrink;
 
-    _mainPaint.color = Color.fromRGBO(color.red, color.green, color.blue, opacity * 0.85);
+    _mainPaint.color = Color.fromRGBO(color.red, color.green, color.blue, opacity * kSplatMainOpacity);
     canvas.drawCircle(Offset.zero, _radius * scale, _mainPaint);
 
-    if (_hasHighlight && opacity > 0.3) {
-      _highlightPaint.color = Color.fromRGBO(255, 255, 255, opacity * 0.3);
+    if (_hasHighlight && opacity > kSplatHighlightOpacity) {
+      _highlightPaint.color = Color.fromRGBO(255, 255, 255, opacity * kSplatHighlightOpacity);
       canvas.drawCircle(
-        Offset(-_radius * 0.25, -_radius * 0.25),
-        _radius * scale * 0.35,
+        Offset(-_radius * kSplatHighlightOffsetX.abs(), -_radius * kSplatHighlightOffsetY.abs()),
+        _radius * scale * kSplatHighlightRadiusFactor,
         _highlightPaint,
       );
     }
@@ -71,7 +71,7 @@ class PaintSplatParticle extends PositionComponent {
   static List<PaintSplatParticle> burst({
     required Color color,
     required Vector2 origin,
-    int count = 14,
+    int count = kSplatDefaultCount,
     double spreadWidth = 0,
     Random? rng,
   }) {
@@ -83,18 +83,18 @@ class PaintSplatParticle extends PositionComponent {
           ? (r.nextDouble() - 0.5) * spreadWidth
           : 0.0;
 
-      final isBlob = i < 3;
+      final isBlob = i < kSplatBlobThreshold;
 
-      final angle = -pi * 0.15 + r.nextDouble() * (-pi * 0.7);
+      final angle = kSplatAngleStart + r.nextDouble() * kSplatAngleRange;
       final speed = isBlob
-          ? 60 + r.nextDouble() * 100
-          : 100 + r.nextDouble() * 250;
+          ? kSplatBlobMinSpeed + r.nextDouble() * kSplatBlobSpeedVariance
+          : kSplatSmallMinSpeed + r.nextDouble() * kSplatSmallSpeedVariance;
       final life = isBlob
-          ? 0.4 + r.nextDouble() * 0.3
-          : 0.2 + r.nextDouble() * 0.35;
+          ? kSplatBlobMinLife + r.nextDouble() * kSplatBlobLifeVariance
+          : kSplatSmallMinLife + r.nextDouble() * kSplatSmallLifeVariance;
       final radius = isBlob
-          ? 4.0 + r.nextDouble() * 4.0
-          : 1.5 + r.nextDouble() * 3.0;
+          ? kSplatBlobMinRadius + r.nextDouble() * kSplatBlobRadiusVariance
+          : kSplatSmallMinRadius + r.nextDouble() * kSplatSmallRadiusVariance;
 
       particles.add(PaintSplatParticle(
         color: color,

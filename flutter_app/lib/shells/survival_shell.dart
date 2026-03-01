@@ -8,6 +8,8 @@ import '../screens/profile_screen.dart';
 import '../services/user_service.dart';
 import '../services/game_service.dart';
 import '../services/audio_service.dart';
+import '../theme/app_colors.dart';
+import '../utils/format_utils.dart';
 
 class SurvivalShell extends StatefulWidget {
   const SurvivalShell({super.key});
@@ -58,15 +60,6 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
     }
   }
 
-  static String _formatWithCommas(double value) {
-    final whole = value.toStringAsFixed(0);
-    final buf = StringBuffer();
-    for (int i = 0; i < whole.length; i++) {
-      if (i > 0 && (whole.length - i) % 3 == 0) buf.write(',');
-      buf.write(whole[i]);
-    }
-    return buf.toString();
-  }
 
   void _showIdleIncomeDialog(double income, Duration duration) {
     final hours = duration.inHours;
@@ -81,11 +74,11 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFFFF5E8),
+        backgroundColor: AppColors.dialogBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Welcome Back!',
-          style: TextStyle(color: Color(0xFF6B5038), fontWeight: FontWeight.w800),
+          style: TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w800),
           textAlign: TextAlign.center,
         ),
         content: Column(
@@ -95,7 +88,7 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
             const SizedBox(height: 12),
             Text(
               'Auto-Painter earned while you were away ($timeStr):',
-              style: TextStyle(color: const Color(0xFF6B5038).withOpacity(0.6), fontSize: 13),
+              style: TextStyle(color: AppColors.brownDark.withOpacity(0.6), fontSize: 13),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
@@ -109,9 +102,9 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '+${_formatWithCommas(income)}',
+                  '+${fmtCommas(income)}',
                   style: const TextStyle(
-                    color: Color(0xFF4ADE80),
+                    color: AppColors.secondary,
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                   ),
@@ -126,7 +119,7 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
             child: ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4ADE80),
+                backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -174,7 +167,7 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 _CrossyHudTile(
-                                  color: const Color(0xFF2A2A2A),
+                                  color: AppColors.hudDark,
                                   child: Text(
                                     name,
                                     style: const TextStyle(
@@ -188,7 +181,7 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
                                 if (gs.streak > 0) ...[
                                   const SizedBox(width: 4),
                                   _CrossyHudTile(
-                                    color: const Color(0xFF2A2A2A),
+                                    color: AppColors.hudDark,
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -197,7 +190,7 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
                                         Text(
                                           '${gs.streak}',
                                           style: const TextStyle(
-                                            color: Color(0xFFFF6B35),
+                                            color: AppColors.streak,
                                             fontWeight: FontWeight.w900,
                                             fontSize: 14,
                                           ),
@@ -210,16 +203,16 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
                             ),
                             const SizedBox(height: 4),
                             _CrossyHudTile(
-                              color: const Color(0xFF2A2A2A),
+                              color: AppColors.hudDark,
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Image.asset('assets/images/UI/coin250.png', width: 20, height: 20),
                                   const SizedBox(width: 6),
                                   Text(
-                                    _formatCurrencyValue(gs.cash),
+                                    fmtCommas(gs.cash),
                                     style: const TextStyle(
-                                      color: Color(0xFFF5C842),
+                                      color: AppColors.gold,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 15,
                                       letterSpacing: 0.5,
@@ -230,16 +223,16 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
                             ),
                             const SizedBox(height: 4),
                             _CrossyHudTile(
-                              color: const Color(0xFF2A2A2A),
+                              color: AppColors.hudDark,
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Image.asset('assets/images/UI/diamond250.png', width: 20, height: 20),
                                   const SizedBox(width: 6),
                                   Text(
-                                    _formatCurrencyValue(gs.gems.toDouble()),
+                                    fmtCommas(gs.gems.toDouble()),
                                     style: const TextStyle(
-                                      color: Color(0xFFDA70D6),
+                                      color: AppColors.gem,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 15,
                                       letterSpacing: 0.5,
@@ -267,15 +260,6 @@ class _SurvivalShellState extends State<SurvivalShell> with WidgetsBindingObserv
     );
   }
 
-  static String _formatCurrencyValue(double value) {
-    final whole = value.toStringAsFixed(0);
-    final buf = StringBuffer();
-    for (int i = 0; i < whole.length; i++) {
-      if (i > 0 && (whole.length - i) % 3 == 0) buf.write(',');
-      buf.write(whole[i]);
-    }
-    return buf.toString();
-  }
 }
 
 class _CrossyHudTile extends StatelessWidget {
@@ -291,7 +275,7 @@ class _CrossyHudTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFF111111), width: 1.5),
+        border: Border.all(color: AppColors.hudBorder, width: 1.5),
         boxShadow: const [
           BoxShadow(
             color: Color(0x44000000),
@@ -320,11 +304,11 @@ class _CrossyNavBar extends StatelessWidget {
   ];
 
   static const _colors = [
-    Color(0xFF38BDF8), // Trade: sky blue
-    Color(0xFFFF6B6B), // Social: coral
-    Color(0xFFF5C842), // Paint: gold
-    Color(0xFF4ADE80), // Level Up: green
-    Color(0xFFA855F7), // Me: purple
+    AppColors.navTrade,
+    AppColors.navSocial,
+    AppColors.navPaint,
+    AppColors.navLevelUp,
+    AppColors.navMe,
   ];
 
   @override
@@ -332,7 +316,7 @@ class _CrossyNavBar extends StatelessWidget {
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      color: const Color(0xFF2A2A2A),
+      color: AppColors.hudDark,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -350,7 +334,7 @@ class _CrossyNavBar extends StatelessWidget {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       curve: Curves.easeOut,
-                      color: isActive ? color : const Color(0xFF2A2A2A),
+                      color: isActive ? color : AppColors.hudDark,
                       child: Center(
                         child: Icon(
                           _icons[i],
@@ -367,7 +351,7 @@ class _CrossyNavBar extends StatelessWidget {
             ),
           ),
           if (bottomPad > 0)
-            Container(height: bottomPad, color: const Color(0xFF2A2A2A)),
+            Container(height: bottomPad, color: AppColors.hudDark),
         ],
       ),
     );

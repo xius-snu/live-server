@@ -1,16 +1,68 @@
+import 'dart:io' show Platform;
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Whether we're running on a desktop platform (Windows/macOS/Linux).
+bool get _isDesktop =>
+    !kIsWeb &&
+    (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
+/// A pool of AudioPlayer instances that allows overlapping one-shot SFX.
+/// Each play() grabs the next player in the pool (round-robin), so multiple
+/// sounds can be active at once without cancelling each other.
+class _SfxPool {
+  final int size;
+  final double volume;
+  late final List<AudioPlayer> _players;
+  int _index = 0;
+
+  _SfxPool({this.size = 4, this.volume = 0.6}) {
+    _players = List.generate(size, (_) {
+      final p = AudioPlayer();
+      p.setVolume(volume);
+      // On Android, prevent SFX from stealing audio focus
+      if (!kIsWeb && Platform.isAndroid) {
+        p.setAudioContext(AudioContext(
+          android: AudioContextAndroid(
+            usageType: AndroidUsageType.game,
+            contentType: AndroidContentType.sonification,
+            audioFocus: AndroidAudioFocus.none,
+          ),
+        ));
+      }
+      return p;
+    });
+  }
+
+  Future<void> play(String asset, {double playbackRate = 1.0}) async {
+    final player = _players[_index];
+    _index = (_index + 1) % size;
+    // On desktop, avoid lowLatency mode which can cause single-channel issues
+    final mode = _isDesktop ? PlayerMode.mediaPlayer : PlayerMode.lowLatency;
+    await player.stop();
+    if (playbackRate != 1.0) {
+      await player.setPlaybackRate(playbackRate);
+    }
+    await player.play(AssetSource(asset), mode: mode);
+  }
+
+  void dispose() {
+    for (final p in _players) {
+      p.dispose();
+    }
+  }
+}
 
 /// Manages all game audio: background music loop and one-shot SFX.
 class AudioService extends ChangeNotifier {
   // Background music player (loops continuously)
   final AudioPlayer _bgmPlayer = AudioPlayer();
 
-  // SFX players (short one-shots, we keep separate instances so they can overlap)
-  final AudioPlayer _rollerSfxPlayer = AudioPlayer();
-  final AudioPlayer _roundCompleteSfxPlayer = AudioPlayer();
+  // SFX pools allow overlapping sounds
+  final _SfxPool _rollerSfxPool = _SfxPool(size: 4, volume: 0.6);
+  final _SfxPool _roundCompleteSfxPool = _SfxPool(size: 3, volume: 0.7);
 
   bool _musicEnabled = false;
   bool _sfxEnabled = true;
@@ -23,37 +75,18 @@ class AudioService extends ChangeNotifier {
 
   AudioService() {
     _bgmPlayer.setReleaseMode(ReleaseMode.loop);
-    _bgmPlayer.setVolume(0.3); // background music quieter
+    _bgmPlayer.setVolume(0.3);
 
-    // Configure SFX players to not steal audio focus on Android.
-    // This prevents SFX from interrupting BGM or each other.
-    _rollerSfxPlayer.setAudioContext(AudioContext(
-      android: AudioContextAndroid(
-        usageType: AndroidUsageType.game,
-        contentType: AndroidContentType.sonification,
-        audioFocus: AndroidAudioFocus.none,
-      ),
-    ));
-    _roundCompleteSfxPlayer.setAudioContext(AudioContext(
-      android: AudioContextAndroid(
-        usageType: AndroidUsageType.game,
-        contentType: AndroidContentType.sonification,
-        audioFocus: AndroidAudioFocus.none,
-      ),
-    ));
-
-    // Configure BGM to duck other audio (lower volume of other apps)
-    // but keep its own focus stable
-    _bgmPlayer.setAudioContext(AudioContext(
-      android: AudioContextAndroid(
-        usageType: AndroidUsageType.game,
-        contentType: AndroidContentType.music,
-        audioFocus: AndroidAudioFocus.gainTransientMayDuck,
-      ),
-    ));
-
-    _rollerSfxPlayer.setVolume(0.6);
-    _roundCompleteSfxPlayer.setVolume(0.7);
+    // Configure BGM audio context on Android
+    if (!kIsWeb && Platform.isAndroid) {
+      _bgmPlayer.setAudioContext(AudioContext(
+        android: AudioContextAndroid(
+          usageType: AndroidUsageType.game,
+          contentType: AndroidContentType.music,
+          audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+        ),
+      ));
+    }
 
     loadPrefs();
   }
@@ -97,11 +130,7 @@ class AudioService extends ChangeNotifier {
   Future<void> playRollerSweep() async {
     if (!_sfxEnabled) return;
     try {
-      await _rollerSfxPlayer.stop(); // reset if still playing
-      await _rollerSfxPlayer.play(
-        AssetSource('sfx/rollersweepup.mp3'),
-        mode: PlayerMode.lowLatency, // uses SoundPool on Android
-      );
+      await _rollerSfxPool.play('sfx/rollersweepup.mp3');
     } catch (e) {
       debugPrint('AudioService: roller SFX failed: $e');
     }
@@ -114,11 +143,9 @@ class AudioService extends ChangeNotifier {
     try {
       final semitones = streak.clamp(0, 10);
       final rate = pow(2, semitones / 12).toDouble();
-      await _roundCompleteSfxPlayer.stop();
-      await _roundCompleteSfxPlayer.setPlaybackRate(rate);
-      await _roundCompleteSfxPlayer.play(
-        AssetSource('sfx/roundcomplete_cashregister.mp3'),
-        mode: PlayerMode.lowLatency, // uses SoundPool on Android
+      await _roundCompleteSfxPool.play(
+        'sfx/roundcomplete_cashregister.mp3',
+        playbackRate: rate,
       );
     } catch (e) {
       debugPrint('AudioService: round-complete SFX failed: $e');
@@ -168,8 +195,8 @@ class AudioService extends ChangeNotifier {
   @override
   void dispose() {
     _bgmPlayer.dispose();
-    _rollerSfxPlayer.dispose();
-    _roundCompleteSfxPlayer.dispose();
+    _rollerSfxPool.dispose();
+    _roundCompleteSfxPool.dispose();
     super.dispose();
   }
 }

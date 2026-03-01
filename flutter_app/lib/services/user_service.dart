@@ -12,6 +12,7 @@ class UserService extends ChangeNotifier {
   String? _userId;
   String? _username;
   String? _friendCode;
+  String? _authToken;
 
   static const String _host = 'live-server-4c3n.onrender.com';
   String get _baseUrl => 'https://$_host';
@@ -23,12 +24,19 @@ class UserService extends ChangeNotifier {
   String? get friendCode => _friendCode;
   bool get hasUser => _userId != null && _username != null;
 
+  /// Returns auth headers for authenticated API requests.
+  Map<String, String> get authHeaders => {
+    'Content-Type': 'application/json',
+    if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+  };
+
   Future<void> init() async {
     _userId = await _getStableDeviceId();
 
     final prefs = await SharedPreferences.getInstance();
     _username = prefs.getString('username');
     _friendCode = prefs.getString('friend_code');
+    _authToken = prefs.getString('auth_token');
 
     if (_friendCode == null) {
       await _generateFriendCode();
@@ -101,23 +109,36 @@ class UserService extends ChangeNotifier {
     }
   }
 
+  /// Save the auth token returned by the server.
+  Future<void> _saveToken(String token) async {
+    _authToken = token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', token);
+  }
+
   Future<bool> setUsername(String name) async {
     try {
       if (_userId == null) await init();
 
       final response = await http.post(
         Uri.parse('$_baseUrl/api/user'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: json.encode({
           'userId': _userId,
           'username': name,
+          'friendCode': _friendCode,
         }),
       );
 
       if (response.statusCode == 200) {
-        _username = name;
+        final data = json.decode(response.body);
+        _username = data['username'] ?? name;
+        // Save token if server issued one (new user or migration)
+        if (data['token'] != null) {
+          await _saveToken(data['token']);
+        }
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('username', name);
+        await prefs.setString('username', _username!);
         notifyListeners();
         return true;
       }
@@ -130,5 +151,87 @@ class UserService extends ChangeNotifier {
 
   String getWsUrl(String path) {
     return 'wss://$_host/ws/$path?userId=$_userId&username=$_username';
+  }
+
+  /// Look up a user by friend code. Returns {user_id, username, friend_code} or null.
+  Future<Map<String, dynamic>?> lookupByFriendCode(String code) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/user/by-code/${code.toUpperCase()}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Lookup by code error: $e');
+      return null;
+    }
+  }
+
+  /// Add a friend by their userId.
+  Future<bool> addFriend(String friendId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/friends/add'),
+        headers: authHeaders,
+        body: json.encode({'userId': _userId, 'friendId': friendId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Add friend error: $e');
+      return false;
+    }
+  }
+
+  /// Remove a friend.
+  Future<bool> removeFriend(String friendId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/friends/remove'),
+        headers: authHeaders,
+        body: json.encode({'userId': _userId, 'friendId': friendId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Remove friend error: $e');
+      return false;
+    }
+  }
+
+  /// List friends with basic stats.
+  Future<List<Map<String, dynamic>>> listFriends() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/friends/$_userId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return List<Map<String, dynamic>>.from(data['friends'] ?? []);
+      }
+      return [];
+    } catch (e) {
+      debugPrint('List friends error: $e');
+      return [];
+    }
+  }
+
+  /// Get a user's public profile (for friend profile view).
+  Future<Map<String, dynamic>?> getUserProfile(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/user/$userId/profile'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Get profile error: $e');
+      return null;
+    }
   }
 }

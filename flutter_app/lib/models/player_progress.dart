@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:math';
+import '../config/game_config.dart';
 import 'upgrade.dart';
 import 'house.dart';
+import 'roller_inventory_item.dart';
 
 class PlayerProgress {
   double cash;
@@ -15,8 +18,10 @@ class PlayerProgress {
   double totalCashEarned;
   int streak; // consecutive walls with coverage bonus, tiered (7/10 max)
   double totalCoverageAccumulated; // sum of all wall coverages for averaging
-  Set<String> ownedSkins;
+  Set<String> ownedSkins; // kept for migration only
   String equippedSkin;
+  String equippedColorId;
+  List<RollerInventoryItem> rollerInventory;
   /// Whether the player has achieved 100% coverage on the current house level.
   /// Resets when house level advances. Must be true to upgrade house.
   bool hasPerfectedCurrentHouse;
@@ -34,10 +39,21 @@ class PlayerProgress {
     this.totalCoverageAccumulated = 0,
     Set<String>? ownedSkins,
     this.equippedSkin = 'default',
+    this.equippedColorId = 'cherry_red',
+    List<RollerInventoryItem>? rollerInventory,
     this.hasPerfectedCurrentHouse = false,
   })  : upgradeLevels = upgradeLevels ?? {},
         lastOnlineAt = lastOnlineAt ?? DateTime.now(),
-        ownedSkins = ownedSkins ?? {'default'};
+        ownedSkins = ownedSkins ?? {'default'},
+        rollerInventory = rollerInventory ??
+            [
+              RollerInventoryItem(
+                rollerId: 'default',
+                colorId: 'cherry_red',
+                colorTier: ColorTier.common,
+                colorHex: 0xFFFF3B30,
+              ),
+            ];
 
   int getUpgradeLevel(UpgradeType type) => upgradeLevels[type] ?? 0;
 
@@ -60,7 +76,7 @@ class PlayerProgress {
   double get baseCashPerWall =>
       HouseDefinition.baseCashForHouseLevel(houseLevel);
 
-  int get maxStrokes => 6 + getUpgradeLevel(UpgradeType.extraStroke);
+  int get maxStrokes => kRollerBaseStrokes + getUpgradeLevel(UpgradeType.extraStroke);
 
   /// Roller width as fraction of wall. Derived from roller level and house level.
   double get rollerWidthPercent =>
@@ -69,14 +85,14 @@ class PlayerProgress {
   /// Roller speed multiplier. More levels = slower (more precise).
   double get rollerSpeedMultiplier {
     final level = getUpgradeLevel(UpgradeType.steadyHand);
-    return 1.0 / (1.0 + 0.15 * level);
+    return 1.0 / (1.0 + kUpgradeSteadyHandFactor * level);
   }
 
-  double get cashPerTapMultiplier => 1.0 + 0.10 * getUpgradeLevel(UpgradeType.turboSpeed);
+  double get cashPerTapMultiplier => 1.0 + kUpgradeTurboSpeedMultiplier * getUpgradeLevel(UpgradeType.turboSpeed);
 
-  double get idleIncomePerSecond => 2.0 * getUpgradeLevel(UpgradeType.autoPainter);
+  double get idleIncomePerSecond => kUpgradeAutoPainterPerLevel * getUpgradeLevel(UpgradeType.autoPainter);
 
-  double get marketplaceFeePercent => (5 - getUpgradeLevel(UpgradeType.brokerLicense)).toDouble().clamp(2.0, 5.0);
+  double get marketplaceFeePercent => (kUpgradeBrokerBaseFee - getUpgradeLevel(UpgradeType.brokerLicense)).toDouble().clamp(kUpgradeBrokerMinFee, kUpgradeBrokerMaxFee);
 
   /// Cost to upgrade to the next house level.
   double get houseUpgradeCost =>
@@ -114,6 +130,8 @@ class PlayerProgress {
         'totalCoverageAccumulated': totalCoverageAccumulated,
         'ownedSkins': ownedSkins.toList(),
         'equippedSkin': equippedSkin,
+        'equippedColorId': equippedColorId,
+        'rollerInventory': rollerInventory.map((i) => i.toJson()).toList(),
         'hasPerfectedCurrentHouse': hasPerfectedCurrentHouse,
       };
 
@@ -145,6 +163,38 @@ class PlayerProgress {
       upgradeMap.remove(UpgradeType.widerRoller);
     }
 
+    // Migration: old ownedSkins -> rollerInventory
+    List<RollerInventoryItem> rollerInv;
+    String equippedColorId;
+    final equippedSkin = json['equippedSkin'] as String? ?? 'default';
+
+    if (json['rollerInventory'] != null) {
+      rollerInv = (json['rollerInventory'] as List)
+          .map((j) => RollerInventoryItem.fromJson(j as Map<String, dynamic>))
+          .toList();
+      equippedColorId = json['equippedColorId'] as String? ?? 'cherry_red';
+    } else {
+      // Old format: each owned skin gets one random color
+      final oldSkins = json['ownedSkins'] != null
+          ? Set<String>.from(json['ownedSkins'] as List)
+          : {'default'};
+      final rng = Random();
+      String migratedColorId = 'cherry_red';
+      rollerInv = oldSkins.map((skinId) {
+        final color = rollRandomPaintColor(rng);
+        if (skinId == equippedSkin) {
+          migratedColorId = color.id;
+        }
+        return RollerInventoryItem(
+          rollerId: skinId,
+          colorId: color.id,
+          colorTier: color.tier,
+          colorHex: color.hex,
+        );
+      }).toList();
+      equippedColorId = migratedColorId;
+    }
+
     return PlayerProgress(
       cash: (json['cash'] as num?)?.toDouble() ?? 0,
       gems: json['gems'] as int? ?? json['stars'] as int? ?? 0,
@@ -161,7 +211,9 @@ class PlayerProgress {
       ownedSkins: json['ownedSkins'] != null
           ? Set<String>.from(json['ownedSkins'] as List)
           : {'default'},
-      equippedSkin: json['equippedSkin'] as String? ?? 'default',
+      equippedSkin: equippedSkin,
+      equippedColorId: equippedColorId,
+      rollerInventory: rollerInv,
       hasPerfectedCurrentHouse: json['hasPerfectedCurrentHouse'] as bool? ?? false,
     );
   }
