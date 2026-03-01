@@ -374,6 +374,23 @@ fastify.register(async function (fastify) {
         console.log('Schema migration note:', e.message);
     }
 
+    // Friends table (separate try/catch so it runs even if earlier migrations fail)
+    try {
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS friend_code TEXT');
+        await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_friend_code ON users(friend_code) WHERE friend_code IS NOT NULL');
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS friends (
+                user_id TEXT NOT NULL REFERENCES users(user_id),
+                friend_id TEXT NOT NULL REFERENCES users(user_id),
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, friend_id)
+            )
+        `);
+        console.log('Friends table migration complete');
+    } catch (e) {
+        console.log('Friends table migration note:', e.message);
+    }
+
     // Register auth middleware for all routes
     fastify.addHook('preHandler', authenticateRequest);
 
