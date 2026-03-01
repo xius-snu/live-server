@@ -515,18 +515,19 @@ fastify.register(async function (fastify) {
         }
     });
 
-    // Admin: create friends table (debug)
+    // Admin: recreate friends table (debug)
     fastify.get('/api/admin/create-friends-table', async (req, reply) => {
         try {
+            await pool.query('DROP TABLE IF EXISTS friends');
             await pool.query(`
-                CREATE TABLE IF NOT EXISTS friends (
+                CREATE TABLE friends (
                     user_id TEXT NOT NULL REFERENCES users(user_id),
                     friend_id TEXT NOT NULL REFERENCES users(user_id),
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (user_id, friend_id)
                 )
             `);
-            return { success: true, message: 'Friends table created' };
+            return { success: true, message: 'Friends table recreated' };
         } catch (e) {
             return { error: e.message };
         }
