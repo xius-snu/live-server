@@ -96,6 +96,7 @@ const PUBLIC_ROUTES = new Set([
     'GET:/api/leaderboard/current',
     'POST:/api/user', // registration handled separately with its own token logic
     'GET:/api/user/by-code/:code',
+    'GET:/api/admin/users',
     'GET:/api/friends/:userId',
     'GET:/api/user/:userId/profile',
 ]);
@@ -457,6 +458,23 @@ fastify.register(async function (fastify) {
         } catch (e) {
             fastify.log.error('DB Get Error: ' + e.message);
             return { username: null };
+        }
+    });
+
+    // ==================
+    // REST API: ADMIN
+    // ==================
+
+    // List all users (admin view)
+    fastify.get('/api/admin/users', async (req, reply) => {
+        try {
+            const res = await pool.query(
+                'SELECT user_id, username, friend_code FROM users ORDER BY username'
+            );
+            return { users: res.rows };
+        } catch (e) {
+            fastify.log.error('Admin users error: ' + e.message);
+            return reply.code(500).send({ error: 'Database error' });
         }
     });
 
