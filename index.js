@@ -106,6 +106,9 @@ const PUBLIC_ROUTES = new Set([
     'POST:/api/friends/decline',
     'POST:/api/friends/cancel',
     'GET:/api/admin/migrate-friends',
+    'POST:/api/leaderboard/join',
+    'POST:/api/leaderboard/submit',
+    'GET:/api/leaderboard/status',
 ]);
 
 async function authenticateRequest(req, reply) {
