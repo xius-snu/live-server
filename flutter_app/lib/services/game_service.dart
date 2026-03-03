@@ -34,14 +34,20 @@ class GameService extends ChangeNotifier {
   String? _syncBaseUrl;
   String? _syncUserId;
 
+  bool _hasLaunchSynced = false;
+
   void setSyncInfo(String baseUrl, String userId) {
-    final isFirstSync = _syncBaseUrl == null && _syncUserId == null;
     _syncBaseUrl = baseUrl;
     _syncUserId = userId;
-    // Push local progress to server on first connect (app launch)
+    // Push local progress to server once on app launch
     // so friend stats and online status are up-to-date immediately.
-    if (isFirstSync && _initialized) {
-      syncProgressToServer(baseUrl, userId);
+    _tryLaunchSync();
+  }
+
+  void _tryLaunchSync() {
+    if (!_hasLaunchSynced && _initialized && _syncBaseUrl != null && _syncUserId != null) {
+      _hasLaunchSynced = true;
+      syncProgressToServer(_syncBaseUrl!, _syncUserId!);
     }
   }
 
@@ -94,6 +100,7 @@ class GameService extends ChangeNotifier {
     await _loadLocally();
     _rollVisualHouseLevel();
     _initialized = true;
+    _tryLaunchSync();
     notifyListeners();
   }
 
@@ -135,7 +142,8 @@ class GameService extends ChangeNotifier {
   /// Sync progress to the server so friends can see real stats.
   Future<void> syncProgressToServer(String baseUrl, String userId) async {
     try {
-      await http.post(
+      debugPrint('syncProgressToServer: cash=${_progress.cash}, walls=${_progress.totalWallsPainted}, skin=${_progress.equippedSkin}, color=${_progress.equippedColorId}');
+      final response = await http.post(
         Uri.parse('$baseUrl/api/progress/save'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
@@ -154,6 +162,7 @@ class GameService extends ChangeNotifier {
           'rollerInventory': _progress.rollerInventory.map((item) => item.toJson()).toList(),
         }),
       );
+      debugPrint('syncProgressToServer response: ${response.statusCode}');
     } catch (e) {
       debugPrint('Sync progress to server error: $e');
     }
