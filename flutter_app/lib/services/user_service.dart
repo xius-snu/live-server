@@ -46,6 +46,12 @@ class UserService extends ChangeNotifier {
       await _fetchUsernameFromServer();
     }
 
+    // Legacy account migration: if user exists but has no auth token,
+    // re-register with existing username to obtain one from the server.
+    if (_authToken == null && _username != null && _userId != null) {
+      await _refreshAuthToken();
+    }
+
     // Sync friend code to server on every launch
     if (_userId != null && _friendCode != null) {
       _syncFriendCode();
@@ -125,6 +131,30 @@ class UserService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Fetch user error: $e');
+    }
+  }
+
+  /// Re-register with existing username to obtain an auth token for legacy accounts.
+  Future<void> _refreshAuthToken() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/user'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'userId': _userId,
+          'username': _username,
+          'friendCode': _friendCode,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['token'] != null) {
+          await _saveToken(data['token']);
+          debugPrint('Legacy auth token obtained');
+        }
+      }
+    } catch (e) {
+      debugPrint('Refresh auth token error: $e');
     }
   }
 

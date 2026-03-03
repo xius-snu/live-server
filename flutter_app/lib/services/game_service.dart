@@ -35,8 +35,14 @@ class GameService extends ChangeNotifier {
   String? _syncUserId;
 
   void setSyncInfo(String baseUrl, String userId) {
+    final isFirstSync = _syncBaseUrl == null && _syncUserId == null;
     _syncBaseUrl = baseUrl;
     _syncUserId = userId;
+    // Push local progress to server on first connect (app launch)
+    // so friend stats and online status are up-to-date immediately.
+    if (isFirstSync && _initialized) {
+      syncProgressToServer(baseUrl, userId);
+    }
   }
 
   /// The house level used for the current wall's visual appearance.
