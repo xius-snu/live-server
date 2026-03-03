@@ -104,6 +104,10 @@ const PUBLIC_ROUTES = new Set([
     'POST:/api/leaderboard/join',
     'POST:/api/leaderboard/submit',
     'GET:/api/leaderboard/status',
+    'POST:/api/progress/save',
+    'GET:/api/progress/:userId',
+    'GET:/api/inventory/:userId',
+    'GET:/api/user/:userId',
 ]);
 
 async function authenticateRequest(req, reply) {

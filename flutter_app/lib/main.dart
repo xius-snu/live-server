@@ -33,7 +33,7 @@ class PaintRollerApp extends StatelessWidget {
           update: (_, user, prev) {
             final gs = prev!;
             if (user.userId != null) {
-              gs.setSyncInfo(user.baseUrl, user.userId!);
+              gs.setSyncInfo(user.baseUrl, user.userId!, authHeadersGetter: () => user.authHeaders);
             }
             return gs;
           },

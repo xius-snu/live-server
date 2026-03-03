@@ -33,12 +33,14 @@ class GameService extends ChangeNotifier {
   // Server sync info (set by ProxyProvider from UserService)
   String? _syncBaseUrl;
   String? _syncUserId;
+  Map<String, String> Function()? _authHeadersGetter;
 
   bool _hasLaunchSynced = false;
 
-  void setSyncInfo(String baseUrl, String userId) {
+  void setSyncInfo(String baseUrl, String userId, {Map<String, String> Function()? authHeadersGetter}) {
     _syncBaseUrl = baseUrl;
     _syncUserId = userId;
+    if (authHeadersGetter != null) _authHeadersGetter = authHeadersGetter;
     // Push local progress to server once on app launch
     // so friend stats and online status are up-to-date immediately.
     _tryLaunchSync();
@@ -143,9 +145,10 @@ class GameService extends ChangeNotifier {
   Future<void> syncProgressToServer(String baseUrl, String userId) async {
     try {
       debugPrint('syncProgressToServer: cash=${_progress.cash}, walls=${_progress.totalWallsPainted}, skin=${_progress.equippedSkin}, color=${_progress.equippedColorId}');
+      final headers = _authHeadersGetter?.call() ?? {'Content-Type': 'application/json'};
       final response = await http.post(
         Uri.parse('$baseUrl/api/progress/save'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: json.encode({
           'userId': userId,
           'cash': _progress.cash,
