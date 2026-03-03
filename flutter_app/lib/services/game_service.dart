@@ -30,6 +30,15 @@ class GameService extends ChangeNotifier {
   bool _initialized = false;
   final Random _rng = Random();
 
+  // Server sync info (set by ProxyProvider from UserService)
+  String? _syncBaseUrl;
+  String? _syncUserId;
+
+  void setSyncInfo(String baseUrl, String userId) {
+    _syncBaseUrl = baseUrl;
+    _syncUserId = userId;
+  }
+
   /// The house level used for the current wall's visual appearance.
   /// Randomized each wall from a weighted pool of recently unlocked tiers.
   int _visualHouseLevel = 1;
@@ -94,7 +103,22 @@ class GameService extends ChangeNotifier {
     final json = prefs.getString('player_progress');
     if (json != null) {
       _progress = PlayerProgress.fromJsonString(json);
+      _migrateRollerInventoryColors();
     }
+  }
+
+  /// Re-sync saved inventory color tiers & hex with current config definitions.
+  void _migrateRollerInventoryColors() {
+    bool changed = false;
+    for (final item in _progress.rollerInventory) {
+      final def = getPaintColorById(item.colorId);
+      if (def != null && (item.colorTier != def.tier || item.colorHex != def.hex)) {
+        item.colorTier = def.tier;
+        item.colorHex = def.hex;
+        changed = true;
+      }
+    }
+    if (changed) _saveLocally();
   }
 
   Future<void> _saveLocally() async {
@@ -118,6 +142,10 @@ class GameService extends ChangeNotifier {
           'upgrades': {for (final e in _progress.upgradeLevels.entries) e.key.name: e.value},
           'totalWallsPainted': _progress.totalWallsPainted,
           'totalCashEarned': _progress.totalCashEarned,
+          'equippedSkin': _progress.equippedSkin,
+          'equippedColorId': _progress.equippedColorId,
+          'rollerLevel': _progress.rollerLevel,
+          'rollerInventory': _progress.rollerInventory.map((item) => item.toJson()).toList(),
         }),
       );
     } catch (e) {
@@ -181,6 +209,12 @@ class GameService extends ChangeNotifier {
 
     _saveLocally();
     notifyListeners();
+
+    // Fire-and-forget server sync so friends see live stats
+    if (_syncBaseUrl != null && _syncUserId != null) {
+      syncProgressToServer(_syncBaseUrl!, _syncUserId!);
+    }
+
     return (basePayout, streakCashBonus);
   }
 

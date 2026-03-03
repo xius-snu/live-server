@@ -8,6 +8,7 @@ import '../services/audio_service.dart';
 import '../services/marketplace_service.dart';
 import '../models/house.dart';
 import '../models/marketplace_item.dart';
+import '../models/roller_inventory_item.dart';
 import '../theme/app_colors.dart';
 import '../utils/format_utils.dart';
 
@@ -425,7 +426,11 @@ class _InventoryTab extends StatelessWidget {
     return Consumer2<MarketplaceService, GameService>(
       builder: (context, mp, gs, _) {
         final items = mp.inventory;
-        final rollerItems = gs.rollerInventory.where((i) => i.count > 0).toList();
+        final rollerPrices = {for (final s in GameService.rollerSkinDefs) s.id: s.price};
+        final rollerItems = RollerInventoryItem.sorted(
+          gs.rollerInventory.where((i) => i.count > 0).toList(),
+          rollerPrices,
+        );
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -982,6 +987,179 @@ class _FriendsTabState extends State<_FriendsTab> {
     ));
   }
 
+  /// Returns (dotColor, label) for online status based on last_online_at.
+  static (Color, String) _onlineStatus(dynamic lastOnlineAt) {
+    if (lastOnlineAt == null) return (AppColors.brownLight, 'Offline');
+    DateTime? dt;
+    if (lastOnlineAt is String) dt = DateTime.tryParse(lastOnlineAt);
+    if (dt == null) return (AppColors.brownLight, 'Offline');
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 5) return (AppColors.secondary, 'Online now');
+    if (diff.inMinutes < 60) return (AppColors.gold, '${diff.inMinutes}m ago');
+    if (diff.inHours < 24) return (AppColors.brownLight, '${diff.inHours}h ago');
+    if (diff.inDays < 30) return (AppColors.brownLight, '${diff.inDays}d ago');
+    return (AppColors.brownLight, 'A while ago');
+  }
+
+  Widget _buildFriendCard(Map<String, dynamic> friend) {
+    final skinId = friend['equipped_skin'] as String? ?? 'default';
+    final colorId = friend['equipped_color_id'] as String? ?? 'cherry_red';
+    final colorDef = getPaintColorById(colorId);
+    final colorHex = colorDef?.hex ?? 0xFFFF3B30;
+    final colorTier = colorDef?.tier;
+    final tierColor = colorTier != null ? AppColors.colorForTier(colorTier) : AppColors.brownLight;
+
+    final skinDef = GameService.rollerSkinDefs.where((s) => s.id == skinId).firstOrNull;
+    final skinAsset = skinDef?.asset ?? 'default.png';
+
+    final houseLevel = friend['prestige_level'] ?? 0;
+    final houseDef = houseLevel > 0 ? HouseDefinition.getForHouseLevel(houseLevel) : null;
+    final cycle = houseLevel > 0 ? ((houseLevel - 1) ~/ 7) + 1 : 0;
+    final houseLabel = houseDef != null
+        ? '${houseDef.name}${cycle > 1 ? ' ${_toRoman(cycle)}' : ''}'
+        : 'Lv.0';
+
+    final (dotColor, onlineLabel) = _onlineStatus(friend['last_online_at']);
+
+    return GestureDetector(
+      onTap: () => _showFriendProfile(friend),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.cardCream,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.borderBrown, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            // Roller thumbnail with color swatch
+            SizedBox(
+              width: 48, height: 48,
+              child: Stack(
+                children: [
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.borderBrown, width: 1.5),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(7),
+                      child: Image.asset(
+                        'assets/images/rollers/$skinAsset',
+                        width: 44, height: 44,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Text('\u{1F3A8}', style: TextStyle(fontSize: 22)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Color swatch dot
+                  Positioned(
+                    right: 0, bottom: 0,
+                    child: Container(
+                      width: 14, height: 14,
+                      decoration: BoxDecoration(
+                        color: Color(colorHex),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: tierColor, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Name + code + online
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    friend['username'] ?? 'Unknown',
+                    style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    '#${friend['friend_code'] ?? ''}',
+                    style: const TextStyle(color: AppColors.brownLight, fontSize: 10),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Container(
+                        width: 7, height: 7,
+                        decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(onlineLabel, style: TextStyle(color: AppColors.brownLight, fontSize: 9)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Stats column
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // House level pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    houseLabel,
+                    style: const TextStyle(color: AppColors.brownMid, fontSize: 9, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('assets/images/UI/coin250.png', width: 11, height: 11),
+                    const SizedBox(width: 2),
+                    Text(
+                      fmtCommas((friend['cash'] ?? 0).toDouble()),
+                      style: const TextStyle(color: AppColors.gold, fontSize: 10, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  '${friend['total_walls_painted'] ?? 0} walls',
+                  style: const TextStyle(color: AppColors.brownLight, fontSize: 9),
+                ),
+              ],
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, color: AppColors.brownLight, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Convert cycle number to Roman numeral (for house names like "Mansion II").
+  static String _toRoman(int n) {
+    const values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+    const symbols = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I'];
+    var remaining = n;
+    final buf = StringBuffer();
+    for (var i = 0; i < values.length; i++) {
+      while (remaining >= values[i]) {
+        buf.write(symbols[i]);
+        remaining -= values[i];
+      }
+    }
+    return buf.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1166,71 +1344,7 @@ class _FriendsTabState extends State<_FriendsTab> {
                                 child: Text('FRIENDS', style: TextStyle(color: AppColors.brownMid, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
                               ),
                             for (final friend in _friends)
-                              GestureDetector(
-                                onTap: () => _showFriendProfile(friend),
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 6),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardCream,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.borderBrown, width: 1.5),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 40, height: 40,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.background,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: AppColors.brownDark, width: 2),
-                                        ),
-                                        child: const Center(child: Text('\u{1F3A8}', style: TextStyle(fontSize: 18))),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              friend['username'] ?? 'Unknown',
-                                              style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 14),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '#${friend['friend_code'] ?? ''}',
-                                              style: const TextStyle(color: AppColors.brownLight, fontSize: 11),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Image.asset('assets/images/UI/coin250.png', width: 12, height: 12),
-                                              const SizedBox(width: 3),
-                                              Text(
-                                                fmtCommas((friend['cash'] ?? 0).toDouble()),
-                                                style: const TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w700),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${friend['total_walls_painted'] ?? 0} walls',
-                                            style: const TextStyle(color: AppColors.brownLight, fontSize: 10),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(width: 6),
-                                      const Icon(Icons.chevron_right, color: AppColors.brownLight, size: 18),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                              _buildFriendCard(friend),
                           ],
                         ],
                       ),
@@ -1287,37 +1401,20 @@ class _FriendProfileScreenState extends State<_FriendProfileScreen> {
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Avatar
-                        Container(
-                          width: 80, height: 80,
-                          decoration: BoxDecoration(
-                            color: AppColors.cardCream,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.brownDark, width: 3),
-                          ),
-                          child: const Center(child: Text('\u{1F3A8}', style: TextStyle(fontSize: 36))),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          _profile!['user']?['username'] ?? widget.friendName,
-                          style: const TextStyle(color: AppColors.brownDark, fontSize: 20, fontWeight: FontWeight.w800),
-                        ),
-                        if (_profile!['user']?['friend_code'] != null) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: AppColors.brownDark, borderRadius: BorderRadius.circular(6)),
-                            child: Text(
-                              '#${_profile!['user']['friend_code']}',
-                              style: const TextStyle(color: AppColors.tabUnselected, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-                            ),
-                          ),
-                        ],
+                        _buildHeader(),
+                        const SizedBox(height: 16),
+                        _buildStatCards(),
+                        const SizedBox(height: 16),
+                        _buildEquippedRoller(),
+                        const SizedBox(height: 16),
+                        _buildInventoryPreview(),
+                        const SizedBox(height: 16),
+                        _buildDetailedStats(),
                         const SizedBox(height: 20),
-                        // Stats
-                        _buildStats(),
-                        const SizedBox(height: 80),
+                        _buildActionButtons(),
+                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
@@ -1325,16 +1422,76 @@ class _FriendProfileScreenState extends State<_FriendProfileScreen> {
     );
   }
 
-  Widget _buildStats() {
+  Widget _buildHeader() {
+    final prog = _profile!['progress'] ?? {};
+    final skinId = prog['equipped_skin'] as String? ?? 'default';
+    final colorId = prog['equipped_color_id'] as String? ?? 'cherry_red';
+    final colorDef = getPaintColorById(colorId);
+    final tierColor = colorDef != null ? AppColors.colorForTier(colorDef.tier) : AppColors.brownLight;
+    final skinDef = GameService.rollerSkinDefs.where((s) => s.id == skinId).firstOrNull;
+    final skinAsset = skinDef?.asset ?? 'default.png';
+
+    final (dotColor, onlineLabel) = _FriendsTabState._onlineStatus(prog['last_online_at']);
+
+    return Column(
+      children: [
+        // Roller avatar
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.cardCream,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: tierColor, width: 3),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: Image.asset(
+              'assets/images/rollers/$skinAsset',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Text('\u{1F3A8}', style: TextStyle(fontSize: 36)),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          _profile!['user']?['username'] ?? widget.friendName,
+          style: const TextStyle(color: AppColors.brownDark, fontSize: 20, fontWeight: FontWeight.w800),
+        ),
+        if (_profile!['user']?['friend_code'] != null) ...[
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: AppColors.brownDark, borderRadius: BorderRadius.circular(6)),
+            child: Text(
+              '#${_profile!['user']['friend_code']}',
+              style: const TextStyle(color: AppColors.tabUnselected, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+            ),
+          ),
+        ],
+        const SizedBox(height: 6),
+        // Online status
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 8, height: 8, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+            const SizedBox(width: 5),
+            Text(onlineLabel, style: TextStyle(color: AppColors.brownMid, fontSize: 11)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCards() {
     final prog = _profile!['progress'] ?? {};
     final cash = (prog['cash'] ?? 0).toDouble();
     final gems = prog['stars'] ?? 0;
     final walls = prog['total_walls_painted'] ?? 0;
-    final totalEarned = (prog['total_cash_earned'] ?? 0).toDouble();
     final houseLevel = prog['prestige_level'] ?? 0;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
@@ -1351,9 +1508,312 @@ class _FriendProfileScreenState extends State<_FriendProfileScreen> {
             Expanded(child: _StatCard('\u{1F3A8}', 'Walls', '$walls', AppColors.badgeGreen)),
           ],
         ),
-        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildEquippedRoller() {
+    final prog = _profile!['progress'] ?? {};
+    final skinId = prog['equipped_skin'] as String? ?? 'default';
+    final colorId = prog['equipped_color_id'] as String? ?? 'cherry_red';
+    final colorDef = getPaintColorById(colorId);
+    final colorName = colorDef?.name ?? 'Unknown';
+    final colorHex = colorDef?.hex ?? 0xFFFF3B30;
+    final tierName = colorDef?.tier.name.toUpperCase() ?? 'COMMON';
+    final tierColor = colorDef != null ? AppColors.colorForTier(colorDef.tier) : AppColors.brownLight;
+    final skinDef = GameService.rollerSkinDefs.where((s) => s.id == skinId).firstOrNull;
+    final skinName = skinDef?.name ?? 'Default';
+    final skinAsset = skinDef?.asset ?? 'default.png';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('EQUIPPED ROLLER', style: TextStyle(color: AppColors.brownMid, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Color(colorHex).withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: tierColor.withOpacity(0.5), width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.cardCream,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: tierColor, width: 2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/images/rollers/$skinAsset',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Text('\u{1F3A8}', style: TextStyle(fontSize: 24)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(skinName, style: const TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w700, fontSize: 14)),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Container(
+                          width: 12, height: 12,
+                          decoration: BoxDecoration(color: Color(colorHex), shape: BoxShape.circle, border: Border.all(color: tierColor, width: 1.5)),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(colorName, style: const TextStyle(color: AppColors.brownMid, fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: tierColor.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                      child: Text(tierName, style: TextStyle(color: tierColor, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInventoryPreview() {
+    final prog = _profile!['progress'] ?? {};
+    final rawInventory = prog['roller_inventory'];
+    if (rawInventory == null || rawInventory is! List || rawInventory.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final items = rawInventory.cast<Map<String, dynamic>>();
+    final displayCount = items.length > 4 ? 4 : items.length;
+    final remaining = items.length - displayCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('INVENTORY', style: TextStyle(color: AppColors.brownMid, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 68,
+          child: Row(
+            children: [
+              for (var i = 0; i < displayCount; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                _buildInventoryChip(items[i]),
+              ],
+              if (remaining > 0) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => _showFullInventory(items),
+                  child: Container(
+                    width: 56, height: 68,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardCream,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.borderBrown, width: 1),
+                    ),
+                    child: Center(
+                      child: Text('+$remaining', style: const TextStyle(color: AppColors.brownMid, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInventoryChip(Map<String, dynamic> item) {
+    final rollerId = item['rollerId'] as String? ?? 'default';
+    final colorId = item['colorId'] as String? ?? 'cherry_red';
+    final colorHex = item['colorHex'] as int? ?? 0xFFFF3B30;
+    final count = item['count'] as int? ?? 1;
+    final skinDef = GameService.rollerSkinDefs.where((s) => s.id == rollerId).firstOrNull;
+    final skinAsset = skinDef?.asset ?? 'default.png';
+    final colorDef = getPaintColorById(colorId);
+    final tierColor = colorDef != null ? AppColors.colorForTier(colorDef.tier) : AppColors.brownLight;
+
+    return GestureDetector(
+      onTap: () => _showFullInventory(
+        (_profile!['progress']?['roller_inventory'] as List?)?.cast<Map<String, dynamic>>() ?? [],
+      ),
+      child: SizedBox(
+        width: 56, height: 68,
+        child: Stack(
+          children: [
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.cardCream,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tierColor.withOpacity(0.6), width: 1.5),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: Image.asset(
+                  'assets/images/rollers/$skinAsset',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Text('\u{1F3A8}', style: TextStyle(fontSize: 18)),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 2, bottom: 14,
+              child: Container(
+                width: 12, height: 12,
+                decoration: BoxDecoration(color: Color(colorHex), shape: BoxShape.circle, border: Border.all(color: tierColor, width: 1.5)),
+              ),
+            ),
+            if (count > 1)
+              Positioned(
+                left: 2, top: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(color: AppColors.brownDark.withOpacity(0.75), borderRadius: BorderRadius.circular(4)),
+                  child: Text('x$count', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFullInventory(List<Map<String, dynamic>> items) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.dialogBg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (ctx, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 8),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.borderBrown, borderRadius: BorderRadius.circular(2))),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(
+                '${widget.friendName}\'s Rollers',
+                style: const TextStyle(color: AppColors.brownDark, fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
+            Expanded(
+              child: GridView.builder(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: items.length,
+                itemBuilder: (ctx, i) {
+                  final item = items[i];
+                  final rollerId = item['rollerId'] as String? ?? 'default';
+                  final colorId = item['colorId'] as String? ?? 'cherry_red';
+                  final colorHex = item['colorHex'] as int? ?? 0xFFFF3B30;
+                  final count = item['count'] as int? ?? 1;
+                  final skinDef = GameService.rollerSkinDefs.where((s) => s.id == rollerId).firstOrNull;
+                  final skinAsset = skinDef?.asset ?? 'default.png';
+                  final skinName = skinDef?.name ?? rollerId;
+                  final colorDef = getPaintColorById(colorId);
+                  final tierColor = colorDef != null ? AppColors.colorForTier(colorDef.tier) : AppColors.brownLight;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.cardCream,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: tierColor.withOpacity(0.6), width: 1.5),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4, bottom: 14),
+                            child: Image.asset(
+                              'assets/images/rollers/$skinAsset',
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Text('\u{1F3A8}', style: TextStyle(fontSize: 20)),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 3, bottom: 14,
+                          child: Container(
+                            width: 12, height: 12,
+                            decoration: BoxDecoration(color: Color(colorHex), shape: BoxShape.circle, border: Border.all(color: tierColor, width: 1.5)),
+                          ),
+                        ),
+                        if (count > 1)
+                          Positioned(
+                            left: 3, top: 3,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(color: AppColors.brownDark.withOpacity(0.75), borderRadius: BorderRadius.circular(4)),
+                              child: Text('x$count', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        Positioned(
+                          left: 0, right: 0, bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.brownDark.withOpacity(0.6),
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(7)),
+                            ),
+                            child: Text(
+                              skinName,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailedStats() {
+    final prog = _profile!['progress'] ?? {};
+    final walls = prog['total_walls_painted'] ?? 0;
+    final totalEarned = (prog['total_cash_earned'] ?? 0).toDouble();
+    final houseLevel = prog['prestige_level'] ?? 0;
+    final rollerLevel = prog['roller_level'] ?? 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         const Text('STATS', style: TextStyle(color: AppColors.brownMid, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 2)),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1365,11 +1825,89 @@ class _FriendProfileScreenState extends State<_FriendProfileScreen> {
             children: [
               _StatRow('Walls Painted', '$walls'),
               _StatRow('Total Earned', '\$${fmtCommas(totalEarned)}'),
-              _StatRow('House Level', 'Lv.$houseLevel', last: true),
+              _StatRow('House Level', 'Lv.$houseLevel'),
+              _StatRow('Roller Level', 'Lv.$rollerLevel', last: true),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        // Trade button (placeholder for Phase 3)
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: null, // Disabled until Phase 3
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
+              foregroundColor: Colors.white,
+              disabledForegroundColor: Colors.white60,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('SEND TRADE REQUEST', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Remove friend button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => _confirmRemoveFriend(),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.brownMid,
+              side: const BorderSide(color: AppColors.borderBrown, width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('REMOVE FRIEND', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmRemoveFriend() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.dialogBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Remove Friend', style: TextStyle(color: AppColors.brownDark, fontWeight: FontWeight.w800)),
+        content: Text('Remove ${widget.friendName} from your friends list?', style: const TextStyle(color: AppColors.brownMid, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.brownMid)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final us = Provider.of<UserService>(context, listen: false);
+              final success = await us.removeFriend(widget.friendId);
+              if (mounted) {
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Friend removed'), backgroundColor: AppColors.brownMid),
+                  );
+                  Navigator.pop(context); // Back to friends list
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to remove friend'), backgroundColor: AppColors.dangerRed),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.dangerRed, foregroundColor: Colors.white),
+            child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -100,11 +100,6 @@ const PUBLIC_ROUTES = new Set([
     'GET:/api/admin/users',
     'GET:/api/friends/:userId',
     'GET:/api/user/:userId/profile',
-    'POST:/api/friends/add',
-    'POST:/api/friends/remove',
-    'POST:/api/friends/accept',
-    'POST:/api/friends/decline',
-    'POST:/api/friends/cancel',
     'GET:/api/admin/migrate-friends',
     'POST:/api/leaderboard/join',
     'POST:/api/leaderboard/submit',
@@ -407,6 +402,17 @@ fastify.register(async function (fastify) {
         console.log('Friends table migration note:', e.message);
     }
 
+    // Roller data columns on player_progress (for friend stats + inventory viewing)
+    try {
+        await pool.query("ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS equipped_skin TEXT DEFAULT 'default'");
+        await pool.query("ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS equipped_color_id TEXT DEFAULT 'cherry_red'");
+        await pool.query('ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS roller_level INTEGER DEFAULT 0');
+        await pool.query("ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS roller_inventory JSONB DEFAULT '[]'::jsonb");
+        console.log('Roller progress columns migration complete');
+    } catch (e) {
+        console.log('Roller progress columns migration note:', e.message);
+    }
+
     // Register auth middleware for all routes
     fastify.addHook('preHandler', authenticateRequest);
 
@@ -577,14 +583,40 @@ fastify.register(async function (fastify) {
         const { userId, friendId } = req.body;
         if (!userId || !friendId) return reply.code(400).send({ error: 'Missing userId or friendId' });
         if (userId === friendId) return reply.code(400).send({ error: 'Cannot add yourself' });
+
+        const client = await pool.connect();
         try {
+            await client.query('BEGIN');
+
+            // Check friend count cap
+            const friendCount = await client.query(
+                `SELECT COUNT(*) as cnt FROM friends WHERE user_id = $1 AND status = 'accepted'`,
+                [userId]
+            );
+            if (parseInt(friendCount.rows[0].cnt) >= 200) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Friend limit reached (200 max)' });
+            }
+
+            // Check outgoing pending cap
+            const pendingCount = await client.query(
+                `SELECT COUNT(*) as cnt FROM friends WHERE user_id = $1 AND status = 'pending'`,
+                [userId]
+            );
+            if (parseInt(pendingCount.rows[0].cnt) >= 50) {
+                await client.query('ROLLBACK');
+                return reply.code(400).send({ error: 'Too many pending requests (50 max)' });
+            }
+
             // Check existing relationship in either direction
-            const existing = await pool.query(
+            const existing = await client.query(
                 `SELECT user_id, friend_id, status FROM friends
-                 WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)`,
+                 WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+                 FOR UPDATE`,
                 [userId, friendId]
             );
             if (existing.rows.some(r => r.status === 'accepted')) {
+                await client.query('ROLLBACK');
                 return reply.code(400).send({ error: 'Already friends' });
             }
             // Check if they already sent us a pending request -> auto-accept
@@ -592,14 +624,15 @@ fastify.register(async function (fastify) {
                 r => r.user_id === friendId && r.friend_id === userId && r.status === 'pending'
             );
             if (incomingPending) {
-                await pool.query(
-                    `UPDATE friends SET status = 'accepted' WHERE user_id = $1 AND friend_id = $2`,
+                await client.query(
+                    `UPDATE friends SET status = 'accepted', added_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND friend_id = $2`,
                     [friendId, userId]
                 );
-                await pool.query(
+                await client.query(
                     `INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
                     [userId, friendId]
                 );
+                await client.query('COMMIT');
                 return { success: true, status: 'accepted' };
             }
             // Check if we already sent a pending request
@@ -607,17 +640,22 @@ fastify.register(async function (fastify) {
                 r => r.user_id === userId && r.friend_id === friendId && r.status === 'pending'
             );
             if (alreadySent) {
+                await client.query('ROLLBACK');
                 return reply.code(400).send({ error: 'Request already sent' });
             }
             // Create new pending request
-            await pool.query(
+            await client.query(
                 `INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'pending') ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'pending'`,
                 [userId, friendId]
             );
+            await client.query('COMMIT');
             return { success: true, status: 'pending' };
         } catch (e) {
+            await client.query('ROLLBACK');
             fastify.log.error('Add friend error: ' + e.message);
             return reply.code(500).send({ error: 'Database error' });
+        } finally {
+            client.release();
         }
     });
 
@@ -625,26 +663,34 @@ fastify.register(async function (fastify) {
     fastify.post('/api/friends/accept', async (req, reply) => {
         const { userId, requesterId } = req.body;
         if (!userId || !requesterId) return reply.code(400).send({ error: 'Missing params' });
+
+        const client = await pool.connect();
         try {
-            const pending = await pool.query(
-                `SELECT 1 FROM friends WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+            await client.query('BEGIN');
+            const pending = await client.query(
+                `SELECT 1 FROM friends WHERE user_id = $1 AND friend_id = $2 AND status = 'pending' FOR UPDATE`,
                 [requesterId, userId]
             );
             if (pending.rows.length === 0) {
+                await client.query('ROLLBACK');
                 return reply.code(404).send({ error: 'No pending request found' });
             }
-            await pool.query(
+            await client.query(
                 `UPDATE friends SET status = 'accepted', added_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND friend_id = $2`,
                 [requesterId, userId]
             );
-            await pool.query(
+            await client.query(
                 `INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted'`,
                 [userId, requesterId]
             );
+            await client.query('COMMIT');
             return { success: true };
         } catch (e) {
+            await client.query('ROLLBACK');
             fastify.log.error('Accept friend error: ' + e.message);
             return reply.code(500).send({ error: 'Database error' });
+        } finally {
+            client.release();
         }
     });
 
@@ -703,7 +749,8 @@ fastify.register(async function (fastify) {
             // Accepted friends
             const friendsRes = await pool.query(`
                 SELECT u.user_id, u.username, u.friend_code,
-                       pp.cash, pp.stars, pp.prestige_level, pp.total_walls_painted, pp.total_cash_earned
+                       pp.cash, pp.stars, pp.prestige_level, pp.total_walls_painted, pp.total_cash_earned,
+                       pp.equipped_skin, pp.equipped_color_id, pp.last_online_at, pp.roller_level
                 FROM friends f
                 JOIN users u ON u.user_id = f.friend_id
                 LEFT JOIN player_progress pp ON pp.user_id = f.friend_id
@@ -748,7 +795,9 @@ fastify.register(async function (fastify) {
             if (userRes.rows.length === 0) return reply.code(404).send({ error: 'User not found' });
 
             const progRes = await pool.query(
-                'SELECT cash, stars, prestige_level, total_walls_painted, total_cash_earned FROM player_progress WHERE user_id = $1',
+                `SELECT cash, stars, prestige_level, total_walls_painted, total_cash_earned,
+                        equipped_skin, equipped_color_id, roller_level, roller_inventory, last_online_at
+                 FROM player_progress WHERE user_id = $1`,
                 [userId]
             );
             const progress = progRes.rows.length > 0 ? progRes.rows[0] : {};
@@ -766,7 +815,8 @@ fastify.register(async function (fastify) {
 
     fastify.post('/api/progress/save', async (req, reply) => {
         const { userId, cash, stars, prestigeLevel, currentHouse, currentRoom,
-                upgrades, totalWallsPainted, totalCashEarned } = req.body;
+                upgrades, totalWallsPainted, totalCashEarned,
+                equippedSkin, equippedColorId, rollerLevel, rollerInventory } = req.body;
         if (!userId) return reply.code(400).send({ error: 'Missing userId' });
 
         // Validate numeric fields
@@ -776,24 +826,35 @@ fastify.register(async function (fastify) {
             prestigeLevel != null && validateNumber(prestigeLevel, { min: 0, max: 10000, integer: true, name: 'prestigeLevel' }),
             totalWallsPainted != null && validateNumber(totalWallsPainted, { min: 0, integer: true, name: 'totalWallsPainted' }),
             totalCashEarned != null && validateNumber(totalCashEarned, { min: 0, name: 'totalCashEarned' }),
+            rollerLevel != null && validateNumber(rollerLevel, { min: 0, max: 10000, integer: true, name: 'rollerLevel' }),
         ].filter(Boolean);
         if (errors.length > 0) return reply.code(400).send({ error: errors[0] });
+
+        // Validate roller inventory is array if provided
+        const safeRollerInventory = Array.isArray(rollerInventory) ? rollerInventory : [];
 
         try {
             await pool.query(`
                 INSERT INTO player_progress
                     (user_id, cash, stars, prestige_level, current_house, current_room,
-                     upgrades, total_walls_painted, total_cash_earned, last_online_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                     upgrades, total_walls_painted, total_cash_earned,
+                     equipped_skin, equipped_color_id, roller_level, roller_inventory,
+                     last_online_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (user_id) DO UPDATE SET
                     cash = $2, stars = $3, prestige_level = $4,
                     current_house = $5, current_room = $6, upgrades = $7,
                     total_walls_painted = $8, total_cash_earned = $9,
+                    equipped_skin = $10, equipped_color_id = $11,
+                    roller_level = $12, roller_inventory = $13,
                     last_online_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
             `, [userId, cash || 0, stars || 0, prestigeLevel || 0,
                 currentHouse || 'dirtHouse', currentRoom || 0,
                 JSON.stringify(upgrades || {}),
-                totalWallsPainted || 0, totalCashEarned || 0]);
+                totalWallsPainted || 0, totalCashEarned || 0,
+                equippedSkin || 'default', equippedColorId || 'cherry_red',
+                rollerLevel || 0, JSON.stringify(safeRollerInventory)]);
 
             return { success: true };
         } catch (e) {

@@ -28,7 +28,16 @@ class PaintRollerApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => UserService()),
-        ChangeNotifierProvider(create: (_) => GameService()),
+        ChangeNotifierProxyProvider<UserService, GameService>(
+          create: (_) => GameService(),
+          update: (_, user, prev) {
+            final gs = prev!;
+            if (user.userId != null) {
+              gs.setSyncInfo(user.baseUrl, user.userId!);
+            }
+            return gs;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => AudioService()),
         ChangeNotifierProxyProvider<UserService, MarketplaceService>(
           create: (_) => MarketplaceService(
@@ -65,7 +74,7 @@ class PaintRollerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GuildService()),
       ],
       child: MaterialApp(
-        title: 'Rich Roller, Poor Roller',
+        title: 'Rich Painter, Poor Painter',
         theme: ThemeData.dark().copyWith(
           scaffoldBackgroundColor: AppColors.background,
           textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
@@ -232,7 +241,7 @@ class _UsernameSetupScreenState extends State<_UsernameSetupScreen> {
               const Text('🎨', style: TextStyle(fontSize: 56)),
               const SizedBox(height: 16),
               const Text(
-                'Rich Roller, Poor Roller',
+                'Rich Painter, Poor Painter',
                 style: TextStyle(
                   color: AppColors.brownDark,
                   fontSize: 28,

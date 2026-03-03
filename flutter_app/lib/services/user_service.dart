@@ -198,7 +198,7 @@ class UserService extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/add'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: json.encode({'userId': _userId, 'friendId': friendId}),
       );
       return json.decode(response.body) as Map<String, dynamic>;
@@ -213,7 +213,7 @@ class UserService extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/accept'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: json.encode({'userId': _userId, 'requesterId': requesterId}),
       );
       return response.statusCode == 200;
@@ -228,7 +228,7 @@ class UserService extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/decline'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: json.encode({'userId': _userId, 'requesterId': requesterId}),
       );
       return response.statusCode == 200;
@@ -243,7 +243,7 @@ class UserService extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/cancel'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: json.encode({'userId': _userId, 'friendId': friendId}),
       );
       return response.statusCode == 200;
@@ -258,7 +258,7 @@ class UserService extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/friends/remove'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: json.encode({'userId': _userId, 'friendId': friendId}),
       );
       return response.statusCode == 200;
